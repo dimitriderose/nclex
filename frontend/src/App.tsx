@@ -1,11 +1,21 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { api } from './services/api'
+import { contentSetup } from './services/content-setup'
+import type { SetupProgress } from './services/content-setup'
 import type { AuthUser } from './types'
+import { OfflineBanner, SyncStatusIndicator } from './components/OfflineBanner'
+import { PracticePage } from './pages/PracticePage'
+import { NGNCasePage } from './pages/NGNCasePage'
+import { ReviewPage } from './pages/ReviewPage'
+import { ProgressPage } from './pages/ProgressPage'
+import { VoicePage } from './pages/VoicePage'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [setupProgress, setSetupProgress] = useState<SetupProgress | null>(null)
+  const [setupDone, setSetupDone] = useState(false)
 
   useEffect(() => {
     api.getMe()
@@ -18,42 +28,126 @@ function App() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Run content setup after login
+  useEffect(() => {
+    if (user && !setupDone) {
+      if (contentSetup.needsSetup()) {
+        contentSetup.runFullSetup((progress) => {
+          setSetupProgress(progress)
+          if (progress.phase === 'complete') {
+            setSetupDone(true)
+            setSetupProgress(null)
+          }
+        })
+      } else {
+        setSetupDone(true)
+      }
+    }
+  }, [user, setupDone])
+
   if (loading) {
     return <div className="loading">Loading...</div>
   }
 
   return (
     <div className="app">
+      <OfflineBanner />
       <Routes>
         <Route
-          path="/"
+          path="/login"
+          element={
+            user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />
+          }
+        />
+        <Route
+          path="/*"
           element={
             user ? (
-              <div>
-                <h1>NCLEX Trainer v5</h1>
-                <p>Welcome, {user.email}</p>
-                <button onClick={async () => {
-                  await api.logout()
-                  setUser(null)
-                }}>Logout</button>
-              </div>
+              <AuthenticatedApp
+                user={user}
+                onLogout={() => { api.logout(); setUser(null) }}
+                setupProgress={setupProgress}
+                setupDone={setupDone}
+              />
             ) : (
               <Navigate to="/login" />
             )
           }
         />
-        <Route
-          path="/login"
-          element={
-            user ? (
-              <Navigate to="/" />
-            ) : (
-              <LoginPage onLogin={setUser} />
-            )
-          }
-        />
       </Routes>
     </div>
+  )
+}
+
+function AuthenticatedApp({
+  user,
+  onLogout,
+  setupProgress,
+  setupDone,
+}: {
+  user: AuthUser
+  onLogout: () => void
+  setupProgress: SetupProgress | null
+  setupDone: boolean
+}) {
+  const location = useLocation()
+
+  const navItems = [
+    { path: '/', label: 'Practice' },
+    { path: '/ngn', label: 'NGN Cases' },
+    { path: '/review', label: 'Review' },
+    { path: '/progress', label: 'Progress' },
+    { path: '/voice', label: 'Voice' },
+  ]
+
+  return (
+    <>
+      <nav className="main-nav">
+        <div className="nav-brand">NCLEX Trainer v5</div>
+        <div className="nav-links">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`nav-link${location.pathname === item.path ? ' active' : ''}`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+        <div className="nav-right">
+          <SyncStatusIndicator />
+          <span className="nav-email">{user.email}</span>
+          <button className="nav-logout" onClick={onLogout}>Logout</button>
+        </div>
+      </nav>
+
+      {/* Setup progress overlay */}
+      {setupProgress && !setupDone && (
+        <div className="setup-overlay">
+          <div className="setup-card">
+            <h3>Setting up content...</h3>
+            <p>{setupProgress.message}</p>
+            <div className="setup-bar">
+              <div
+                className="setup-bar-fill"
+                style={{ width: `${setupProgress.total > 0 ? (setupProgress.loaded / setupProgress.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<PracticePage />} />
+          <Route path="/ngn" element={<NGNCasePage />} />
+          <Route path="/review" element={<ReviewPage />} />
+          <Route path="/progress" element={<ProgressPage />} />
+          <Route path="/voice" element={<VoicePage />} />
+        </Routes>
+      </main>
+    </>
   )
 }
 
