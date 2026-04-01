@@ -10,6 +10,7 @@ import { NGNCasePage } from './pages/NGNCasePage'
 import { ReviewPage } from './pages/ReviewPage'
 import { ProgressPage } from './pages/ProgressPage'
 import { VoicePage } from './pages/VoicePage'
+import { AdminDashboard } from './pages/AdminDashboard'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -91,6 +92,7 @@ function AuthenticatedApp({
   setupDone: boolean
 }) {
   const location = useLocation()
+  const isAdmin = user.role === 'ADMIN'
 
   const navItems = [
     { path: '/', label: 'Practice' },
@@ -98,6 +100,8 @@ function AuthenticatedApp({
     { path: '/review', label: 'Review' },
     { path: '/progress', label: 'Progress' },
     { path: '/voice', label: 'Voice' },
+    { path: '/exam', label: 'Exam' },
+    ...(isAdmin ? [{ path: '/admin', label: 'Admin' }] : []),
   ]
 
   return (
@@ -109,7 +113,7 @@ function AuthenticatedApp({
             <Link
               key={item.path}
               to={item.path}
-              className={`nav-link${location.pathname === item.path ? ' active' : ''}`}
+              className={`nav-link${location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path)) ? ' active' : ''}`}
             >
               {item.label}
             </Link>
@@ -145,6 +149,7 @@ function AuthenticatedApp({
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/voice" element={<VoicePage />} />
+          {isAdmin && <Route path="/admin" element={<AdminDashboard />} />}
         </Routes>
       </main>
     </>

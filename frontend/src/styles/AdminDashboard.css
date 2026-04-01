@@ -1,0 +1,278 @@
+/* Admin Dashboard Styles */
+.admin-dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.admin-dashboard h1 {
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0;
+}
+
+.admin-tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+}
+
+.admin-tab:hover {
+  color: #1e293b;
+}
+
+.admin-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+.admin-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.admin-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-search {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 250px;
+}
+
+.admin-count {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  font-weight: 600;
+  color: #475569;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.admin-table select {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.row-deleted {
+  opacity: 0.5;
+  background: #fef2f2 !important;
+}
+
+.uuid-cell {
+  font-family: monospace;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.meta-cell {
+  font-family: monospace;
+  font-size: 11px;
+  color: #64748b;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-cell {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px !important;
+}
+
+.admin-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.admin-pagination {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.admin-pagination button {
+  padding: 6px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.admin-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Buttons */
+.btn-primary {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.btn-warn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #f59e0b;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-danger {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #ef4444;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-success {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #22c55e;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-login { background: #dbeafe; color: #1d4ed8; }
+.badge-register { background: #dcfce7; color: #15803d; }
+.badge-logout { background: #f1f5f9; color: #475569; }
+.badge-claude_chat { background: #fae8ff; color: #7e22ce; }
+.badge-rate_limit_hit { background: #fef3c7; color: #92400e; }
+.badge-error { background: #fecaca; color: #b91c1c; }
+.badge-admin_role_change { background: #e0e7ff; color: #3730a3; }
+.badge-pending { background: #fef3c7; color: #92400e; }
+.badge-reviewed { background: #dbeafe; color: #1d4ed8; }
+.badge-dismissed { background: #f1f5f9; color: #475569; }
+.badge-fixed { background: #dcfce7; color: #15803d; }
+
+.text-warn { color: #f59e0b; font-weight: 600; }
+
+/* KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.kpi-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.kpi-warn {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.kpi-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.kpi-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.admin-error {
+  text-align: center;
+  color: #ef4444;
+  padding: 40px;
+}
