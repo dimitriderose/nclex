@@ -45,3 +45,13 @@ nclex:
     claude:
       capacity: 200
       refill-minutes: 60
+  content-cache:
+    refresh-cron: ${CACHE_REFRESH_CRON:0 0 3 * * ?}  # 3 AM daily
+    retry-max-attempts: 3
+    retry-initial-delay-ms: 200
+  exam:
+    min-questions: ${EXAM_MIN_QUESTIONS:75}
+    max-questions: ${EXAM_MAX_QUESTIONS:145}
+    time-limit-minutes: ${EXAM_TIME_LIMIT:300}
+  readiness:
+    snapshot-cron: ${READINESS_SNAPSHOT_CRON:0 0 4 * * ?}  # 4 AM daily
