@@ -1,0 +1,20 @@
+# Railway deployment configuration for NCLEX Trainer v5
+#
+# This project uses two services:
+# 1. Backend (Spring Boot) - built from backend/Dockerfile
+# 2. Frontend (Nginx)      - built from frontend/Dockerfile
+#
+# Set up via Railway dashboard:
+# - Create a new project
+# - Add a PostgreSQL database
+# - Add two services from the same GitHub repo
+# - Configure each service's root directory and Dockerfile path
+
+[build]
+builder = "dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

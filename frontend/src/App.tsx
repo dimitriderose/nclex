@@ -11,6 +11,7 @@ import { ReviewPage } from './pages/ReviewPage'
 import { ProgressPage } from './pages/ProgressPage'
 import { VoicePage } from './pages/VoicePage'
 import { AdminDashboard } from './pages/AdminDashboard'
+import { ExamPage } from './pages/ExamPage'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -149,6 +150,7 @@ function AuthenticatedApp({
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/voice" element={<VoicePage />} />
+          <Route path="/exam" element={<ExamPage />} />
           {isAdmin && <Route path="/admin" element={<AdminDashboard />} />}
         </Routes>
       </main>
