@@ -1,0 +1,147 @@
+.review-queue {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.review-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.review-progress {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.review-loading, .review-empty {
+  text-align: center;
+  padding: 40px;
+}
+
+.review-empty h3 {
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.review-empty p {
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* Grading panel */
+.grading-panel {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.grading-panel p {
+  margin: 0 0 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.grade-buttons {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.grade-btn {
+  padding: 12px 8px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: pre-line;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.grade-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.grade-0 { border-color: #ef4444; color: #ef4444; }
+.grade-1 { border-color: #f97316; color: #f97316; }
+.grade-2 { border-color: #f59e0b; color: #f59e0b; }
+.grade-3 { border-color: #eab308; color: #eab308; }
+.grade-4 { border-color: #22c55e; color: #22c55e; }
+.grade-5 { border-color: #059669; color: #059669; }
+
+.sm2-info {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* Summary */
+.review-summary {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 32px;
+  text-align: center;
+}
+
+.review-summary h2 {
+  margin: 0 0 24px;
+  color: #1e293b;
+}
+
+.summary-stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 32px;
+}
+
+.summary-stat .stat-value {
+  display: block;
+  font-size: 36px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.summary-stat .stat-label {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.summary-details {
+  text-align: left;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+
+.grade-pass { color: #22c55e; font-weight: 600; }
+.grade-fail { color: #ef4444; font-weight: 600; }
+
+.next-review {
+  font-size: 12px;
+  color: #94a3b8;
+}

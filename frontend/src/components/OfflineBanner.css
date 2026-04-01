@@ -1,0 +1,84 @@
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.offline-banner.offline {
+  background: #fef2f2;
+  border-bottom: 2px solid #fecaca;
+  color: #b91c1c;
+}
+
+.offline-banner.syncing {
+  background: #fffbeb;
+  border-bottom: 2px solid #fde68a;
+  color: #92400e;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.banner-icon {
+  font-size: 16px;
+}
+
+.banner-text {
+  font-weight: 500;
+}
+
+.sync-btn {
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sync-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.sync-status {
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+/* Sync indicator (inline) */
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.sync-indicator.online .sync-dot {
+  background: #22c55e;
+}
+
+.sync-indicator.offline .sync-dot {
+  background: #ef4444;
+}
+
+.sync-label {
+  color: #64748b;
+}
