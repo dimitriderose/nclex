@@ -1,0 +1,246 @@
+.question-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 720px;
+  margin: 0 auto;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.question-header {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-type {
+  background: #e8f4fd;
+  color: #1976d2;
+}
+
+.badge-difficulty {
+  background: #fef3e2;
+  color: #e65100;
+}
+
+.badge-ncjmm {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.badge-validated {
+  background: #c8e6c9;
+  color: #1b5e20;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.question-topic {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+.question-stem {
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+  color: #1e293b;
+}
+
+.sata-instruction {
+  color: #7c3aed;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.question-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  font-size: 15px;
+  transition: all 0.15s;
+}
+
+.question-option:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #f0f9ff;
+}
+
+.question-option.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.question-option.correct {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
+.question-option.incorrect {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.question-option:disabled {
+  cursor: default;
+}
+
+.option-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  font-weight: 700;
+  font-size: 13px;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.option-text {
+  flex: 1;
+}
+
+.option-check {
+  color: #22c55e;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.option-x {
+  color: #ef4444;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dosage-input {
+  margin-bottom: 20px;
+}
+
+.dosage-formula {
+  font-family: monospace;
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  color: #475569;
+}
+
+.dosage-answer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dosage-field {
+  padding: 10px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 16px;
+  width: 200px;
+}
+
+.dosage-field:focus {
+  border-color: #3b82f6;
+  outline: none;
+}
+
+.dosage-unit {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.dosage-correct {
+  color: #22c55e;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.submit-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.rationale {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 4px solid #3b82f6;
+}
+
+.rationale h4 {
+  margin: 0 0 8px;
+  color: #1e293b;
+  font-size: 14px;
+}
+
+.rationale p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.source-attribution {
+  margin-top: 12px;
+  text-align: right;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
