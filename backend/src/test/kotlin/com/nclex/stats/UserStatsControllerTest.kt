@@ -11,103 +11,224 @@ import jakarta.servlet.http.HttpServletRequest
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.time.Instant
-import java.util.*
+import java.util.UUID
 
 class UserStatsControllerTest {
 
-    private val repository = mockk<UserStatsRepository>()
-    private val auditLogger = mockk<AuditLogger>()
-    private val request = mockk<HttpServletRequest>()
-    private val userId = UUID.randomUUID()
+    private val userStatsRepository: UserStatsRepository = mockk()
+    private val auditLogger: AuditLogger = mockk()
+    private val httpRequest: HttpServletRequest = mockk()
 
     private lateinit var controller: UserStatsController
+    private val userId = UUID.randomUUID()
 
     @BeforeEach
-    fun setup() {
-        every { auditLogger.logUserAction(any(), any(), any(), any()) } returns AuditLog(eventType = "test")
-        controller = UserStatsController(repository, auditLogger)
-        every { request.getAttribute("userId") } returns userId
+    fun setUp() {
+        every { auditLogger.log(any(), any(), any(), any(), any()) } returns AuditLog(eventType = "test")
+        controller = UserStatsController(userStatsRepository, auditLogger)
+    }
+
+    private fun mockAuth() {
+        every { httpRequest.getAttribute("userId") } returns userId
     }
 
     private fun createStats() = UserStats(
         userId = userId,
-        topicScores = emptyMap(),
-        history = emptyList(),
-        readinessScore = 75.0,
+        topicScores = mapOf("Pharm" to mapOf("correct" to 5, "total" to 10)),
+        history = listOf(mapOf<String, Any>("q" to 1)),
+        streak = 3,
+        readinessScore = 72.0,
+        ncjmmScores = emptyMap(),
         lastActiveAt = Instant.now()
     )
 
-    @Test
-    fun `getStats returns stats when found`() {
-        val stats = createStats()
-        every { repository.findByUserId(userId) } returns stats
+    // ── extractUserId ───────────────────────────────────────────────
 
-        val result = controller.getStats(request)
-        assertThat(result.statusCode.value()).isEqualTo(200)
+    @Nested
+    inner class ExtractUserId {
+
+        @Test
+        fun `null userId throws UnauthorizedException`() {
+            every { httpRequest.getAttribute("userId") } returns null
+
+            assertThatThrownBy {
+                controller.getStats(httpRequest)
+            }.isInstanceOf(UnauthorizedException::class.java)
+        }
+
+        @Test
+        fun `wrong type userId throws UnauthorizedException`() {
+            every { httpRequest.getAttribute("userId") } returns "not-uuid"
+
+            assertThatThrownBy {
+                controller.getStats(httpRequest)
+            }.isInstanceOf(UnauthorizedException::class.java)
+        }
     }
 
-    @Test
-    fun `getStats throws NotFoundException when not found`() {
-        every { repository.findByUserId(userId) } returns null
+    // ── getStats ────────────────────────────────────────────────────
 
-        assertThatThrownBy { controller.getStats(request) }
-            .isInstanceOf(NotFoundException::class.java)
+    @Nested
+    inner class GetStats {
+
+        @Test
+        fun `success returns stats`() {
+            mockAuth()
+            val stats = createStats()
+            every { userStatsRepository.findByUserId(userId) } returns stats
+
+            val result = controller.getStats(httpRequest)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            assertThat(result.body!!.userId).isEqualTo(userId)
+            assertThat(result.body!!.streak).isEqualTo(3)
+            assertThat(result.body!!.readinessScore).isEqualTo(72.0)
+        }
+
+        @Test
+        fun `not found throws NotFoundException`() {
+            mockAuth()
+            every { userStatsRepository.findByUserId(userId) } returns null
+
+            assertThatThrownBy {
+                controller.getStats(httpRequest)
+            }.isInstanceOf(NotFoundException::class.java)
+                .hasMessageContaining("Stats not found")
+        }
     }
 
-    @Test
-    fun `updateStats updates provided fields`() {
-        val stats = createStats()
-        every { repository.findByUserId(userId) } returns stats
-        every { repository.save(any()) } returns stats
+    // ── updateStats ─────────────────────────────────────────────────
 
-        val body = UpdateStatsRequest(streak = 10, readinessScore = 85.0)
-        val result = controller.updateStats(body, request)
-        assertThat(result.statusCode.value()).isEqualTo(200)
-        assertThat(stats.streak).isEqualTo(10)
-        assertThat(stats.readinessScore).isEqualTo(85.0)
-        verify { auditLogger.logUserAction(eq("STATS_UPDATED"), eq(userId), isNull(), any()) }
+    @Nested
+    inner class UpdateStats {
+
+        @Test
+        fun `updates all provided fields`() {
+            mockAuth()
+            val stats = createStats()
+            every { userStatsRepository.findByUserId(userId) } returns stats
+            every { userStatsRepository.save(any()) } answers { firstArg() }
+
+            val body = UpdateStatsRequest(
+                topicScores = mapOf("Cardio" to mapOf("correct" to 8, "total" to 10)),
+                history = listOf(mapOf("q" to 1), mapOf("q" to 2)),
+                streak = 5,
+                readinessScore = 85.0,
+                ncjmmScores = mapOf("step" to mapOf("correct" to 7, "total" to 10))
+            )
+
+            val result = controller.updateStats(body, httpRequest)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            assertThat(stats.topicScores).containsKey("Cardio")
+            assertThat(stats.streak).isEqualTo(5)
+            assertThat(stats.readinessScore).isEqualTo(85.0)
+            assertThat(stats.lastActiveAt).isNotNull()
+            verify { auditLogger.log(eq("STATS_UPDATED"), eq(userId), any(), any(), any()) }
+        }
+
+        @Test
+        fun `updates only provided fields leaving others unchanged`() {
+            mockAuth()
+            val stats = createStats()
+            val originalTopicScores = stats.topicScores
+            every { userStatsRepository.findByUserId(userId) } returns stats
+            every { userStatsRepository.save(any()) } answers { firstArg() }
+
+            val body = UpdateStatsRequest(streak = 10) // only streak
+
+            controller.updateStats(body, httpRequest)
+
+            assertThat(stats.streak).isEqualTo(10)
+            assertThat(stats.topicScores).isEqualTo(originalTopicScores) // unchanged
+        }
+
+        @Test
+        fun `not found throws NotFoundException`() {
+            mockAuth()
+            every { userStatsRepository.findByUserId(userId) } returns null
+
+            assertThatThrownBy {
+                controller.updateStats(UpdateStatsRequest(), httpRequest)
+            }.isInstanceOf(NotFoundException::class.java)
+        }
     }
 
-    @Test
-    fun `updateStats ignores null fields`() {
-        val stats = createStats()
-        stats.streak = 5
-        every { repository.findByUserId(userId) } returns stats
-        every { repository.save(any()) } returns stats
+    // ── updateStreak ────────────────────────────────────────────────
 
-        val body = UpdateStatsRequest() // all null
-        controller.updateStats(body, request)
-        assertThat(stats.streak).isEqualTo(5) // unchanged
+    @Nested
+    inner class UpdateStreak {
+
+        @Test
+        fun `updates streak value`() {
+            mockAuth()
+            val stats = createStats()
+            every { userStatsRepository.findByUserId(userId) } returns stats
+            every { userStatsRepository.save(any()) } answers { firstArg() }
+
+            val result = controller.updateStreak(mapOf("streak" to 7), httpRequest)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            assertThat(stats.streak).isEqualTo(7)
+            assertThat(stats.lastActiveAt).isNotNull()
+        }
+
+        @Test
+        fun `missing streak key does not change streak`() {
+            mockAuth()
+            val stats = createStats()
+            every { userStatsRepository.findByUserId(userId) } returns stats
+            every { userStatsRepository.save(any()) } answers { firstArg() }
+
+            controller.updateStreak(emptyMap(), httpRequest)
+
+            assertThat(stats.streak).isEqualTo(3) // original value
+        }
+
+        @Test
+        fun `not found throws NotFoundException`() {
+            mockAuth()
+            every { userStatsRepository.findByUserId(userId) } returns null
+
+            assertThatThrownBy {
+                controller.updateStreak(mapOf("streak" to 1), httpRequest)
+            }.isInstanceOf(NotFoundException::class.java)
+        }
     }
 
-    @Test
-    fun `updateStreak updates streak value`() {
-        val stats = createStats()
-        every { repository.findByUserId(userId) } returns stats
-        every { repository.save(any()) } returns stats
+    // ── appendHistory ───────────────────────────────────────────────
 
-        controller.updateStreak(mapOf("streak" to 7), request)
-        assertThat(stats.streak).isEqualTo(7)
-    }
+    @Nested
+    inner class AppendHistory {
 
-    @Test
-    fun `appendHistory appends entry to list`() {
-        val stats = createStats()
-        every { repository.findByUserId(userId) } returns stats
-        every { repository.save(any()) } returns stats
+        @Test
+        fun `appends entry to history`() {
+            mockAuth()
+            val stats = createStats()
+            val originalSize = stats.history.size
+            every { userStatsRepository.findByUserId(userId) } returns stats
+            every { userStatsRepository.save(any()) } answers { firstArg() }
 
-        val entry = mapOf("topic" to "pharma", "correct" to true)
-        controller.appendHistory(entry, request)
-        assertThat(stats.history).hasSize(1)
-        assertThat(stats.history[0]["topic"]).isEqualTo("pharma")
-    }
+            val entry = mapOf<String, Any>("question" to "q2", "correct" to true)
+            val result = controller.appendHistory(entry, httpRequest)
 
-    @Test
-    fun `no userId throws UnauthorizedException`() {
-        every { request.getAttribute("userId") } returns null
-        assertThatThrownBy { controller.getStats(request) }
-            .isInstanceOf(UnauthorizedException::class.java)
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            assertThat(stats.history.size).isEqualTo(originalSize + 1)
+            assertThat(stats.history.last()).isEqualTo(entry)
+            verify { auditLogger.log(eq("HISTORY_APPENDED"), eq(userId), any(), any(), any()) }
+        }
+
+        @Test
+        fun `not found throws NotFoundException`() {
+            mockAuth()
+            every { userStatsRepository.findByUserId(userId) } returns null
+
+            assertThatThrownBy {
+                controller.appendHistory(mapOf<String, Any>("q" to 1), httpRequest)
+            }.isInstanceOf(NotFoundException::class.java)
+        }
     }
 }
