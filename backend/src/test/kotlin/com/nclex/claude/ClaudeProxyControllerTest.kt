@@ -2,6 +2,7 @@ package com.nclex.claude
 
 import com.nclex.audit.AuditLogger
 import com.nclex.config.RateLimitService
+import com.nclex.exception.ExternalServiceException
 import com.nclex.exception.RateLimitException
 import com.nclex.exception.UnauthorizedException
 import com.nclex.exception.ValidationException
@@ -11,20 +12,21 @@ import jakarta.servlet.http.HttpServletRequest
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.*
 
 class ClaudeProxyControllerTest {
 
-    private val rateLimitService = mockk<RateLimitService>()
-    private val auditLogger = mockk<AuditLogger>()
-    private val request = mockk<HttpServletRequest>()
+    private val rateLimitService: RateLimitService = mockk()
+    private val auditLogger: AuditLogger = mockk()
+    private val httpRequest: HttpServletRequest = mockk()
     private val userId = UUID.randomUUID()
 
     private lateinit var controller: ClaudeProxyController
 
     @BeforeEach
-    fun setup() {
+    fun setUp() {
         every { auditLogger.log(any(), any(), any(), any(), any()) } returns AuditLog(eventType = "test")
         controller = ClaudeProxyController(
             rateLimitService = rateLimitService,
@@ -36,52 +38,113 @@ class ClaudeProxyControllerTest {
         )
     }
 
-    @Test
-    fun `throws UnauthorizedException when no userId`() {
-        every { request.getAttribute("userId") } returns null
+    // ── no userId ───────────────────────────────────────────────────
 
-        val chatRequest = ClaudeRequest(listOf(ClaudeMessage("user", "hello")))
-        assertThatThrownBy { controller.chat(chatRequest, request) }
-            .isInstanceOf(UnauthorizedException::class.java)
+    @Nested
+    inner class NoUserId {
+
+        @Test
+        fun `null userId throws UnauthorizedException`() {
+            every { httpRequest.getAttribute("userId") } returns null
+
+            val request = ClaudeRequest(listOf(ClaudeMessage("user", "hello")))
+            assertThatThrownBy { controller.chat(request, httpRequest) }
+                .isInstanceOf(UnauthorizedException::class.java)
+        }
+
+        @Test
+        fun `wrong type userId throws UnauthorizedException`() {
+            every { httpRequest.getAttribute("userId") } returns "string-not-uuid"
+
+            val request = ClaudeRequest(listOf(ClaudeMessage("user", "hello")))
+            assertThatThrownBy { controller.chat(request, httpRequest) }
+                .isInstanceOf(UnauthorizedException::class.java)
+        }
     }
 
-    @Test
-    fun `throws RateLimitException when rate limit exceeded`() {
-        every { request.getAttribute("userId") } returns userId
-        every { rateLimitService.tryConsumeClaude(userId.toString()) } returns false
+    // ── rate limit ──────────────────────────────────────────────────
 
-        val chatRequest = ClaudeRequest(listOf(ClaudeMessage("user", "hello")))
-        assertThatThrownBy { controller.chat(chatRequest, request) }
-            .isInstanceOf(RateLimitException::class.java)
+    @Nested
+    inner class RateLimit {
+
+        @Test
+        fun `rate limit exceeded throws RateLimitException`() {
+            every { httpRequest.getAttribute("userId") } returns userId
+            every { rateLimitService.tryConsumeClaude(userId.toString()) } returns false
+
+            val request = ClaudeRequest(listOf(ClaudeMessage("user", "hello")))
+            assertThatThrownBy { controller.chat(request, httpRequest) }
+                .isInstanceOf(RateLimitException::class.java)
+                .hasMessageContaining("rate limit exceeded")
+        }
     }
 
-    @Test
-    fun `throws ValidationException for invalid message role`() {
-        every { request.getAttribute("userId") } returns userId
-        every { rateLimitService.tryConsumeClaude(userId.toString()) } returns true
+    // ── invalid role ────────────────────────────────────────────────
 
-        val chatRequest = ClaudeRequest(listOf(ClaudeMessage("system", "hello")))
-        assertThatThrownBy { controller.chat(chatRequest, request) }
-            .isInstanceOf(ValidationException::class.java)
-            .hasMessageContaining("Invalid message role")
+    @Nested
+    inner class InvalidRole {
+
+        @Test
+        fun `system role throws ValidationException`() {
+            every { httpRequest.getAttribute("userId") } returns userId
+            every { rateLimitService.tryConsumeClaude(userId.toString()) } returns true
+
+            val request = ClaudeRequest(listOf(ClaudeMessage("system", "prompt")))
+            assertThatThrownBy { controller.chat(request, httpRequest) }
+                .isInstanceOf(ValidationException::class.java)
+                .hasMessageContaining("Invalid message role: system")
+        }
+
+        @Test
+        fun `unknown role throws ValidationException`() {
+            every { httpRequest.getAttribute("userId") } returns userId
+            every { rateLimitService.tryConsumeClaude(userId.toString()) } returns true
+
+            val request = ClaudeRequest(listOf(ClaudeMessage("tool", "content")))
+            assertThatThrownBy { controller.chat(request, httpRequest) }
+                .isInstanceOf(ValidationException::class.java)
+                .hasMessageContaining("Invalid message role: tool")
+        }
     }
 
-    @Test
-    fun `accepts valid user and assistant roles`() {
-        every { request.getAttribute("userId") } returns userId
-        every { rateLimitService.tryConsumeClaude(userId.toString()) } returns true
+    // ── successful chat ─────────────────────────────────────────────
 
-        val chatRequest = ClaudeRequest(listOf(
-            ClaudeMessage("user", "hello"),
-            ClaudeMessage("assistant", "hi")
-        ))
+    @Nested
+    inner class SuccessfulChat {
 
-        // This will fail at the WebClient call (no real API), but validates roles first
-        try {
-            controller.chat(chatRequest, request)
-        } catch (e: Exception) {
-            // Expected: ExternalServiceException from WebClient
-            assertThat(e).isNotInstanceOf(ValidationException::class.java)
+        @Test
+        fun `valid user and assistant roles pass validation`() {
+            every { httpRequest.getAttribute("userId") } returns userId
+            every { rateLimitService.tryConsumeClaude(userId.toString()) } returns true
+
+            val request = ClaudeRequest(listOf(
+                ClaudeMessage("user", "hello"),
+                ClaudeMessage("assistant", "hi there"),
+                ClaudeMessage("user", "another question")
+            ))
+
+            // Will fail at WebClient call since no real API, but should NOT be auth/rate-limit/validation
+            try {
+                controller.chat(request, httpRequest)
+            } catch (e: Exception) {
+                assertThat(e).isNotInstanceOf(UnauthorizedException::class.java)
+                assertThat(e).isNotInstanceOf(RateLimitException::class.java)
+                assertThat(e).isNotInstanceOf(ValidationException::class.java)
+                // Should be ExternalServiceException from the WebClient call
+                assertThat(e).isInstanceOf(ExternalServiceException::class.java)
+            }
+        }
+
+        @Test
+        fun `single user message passes validation`() {
+            every { httpRequest.getAttribute("userId") } returns userId
+            every { rateLimitService.tryConsumeClaude(userId.toString()) } returns true
+
+            val request = ClaudeRequest(listOf(ClaudeMessage("user", "What is hypertension?")))
+
+            // Will fail at WebClient but proves validation pipeline works
+            assertThatThrownBy { controller.chat(request, httpRequest) }
+                .isInstanceOf(ExternalServiceException::class.java)
         }
     }
 }
