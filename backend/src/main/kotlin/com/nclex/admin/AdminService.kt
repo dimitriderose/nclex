@@ -221,6 +221,10 @@ class AdminService(
 
         val avgReadiness = userStatsRepository.averageReadinessScore() ?: 0.0
 
+        val clientErrorsToday = auditLogRepository.countByEventTypeAndCreatedAtAfter("CLIENT_ERROR", startOfDay)
+        val authFailuresToday = auditLogRepository.countByEventTypeAndCreatedAtAfter("AUTH_FAILURE", startOfDay)
+        val externalServiceErrorsToday = auditLogRepository.countByEventTypeAndCreatedAtAfter("EXTERNAL_SERVICE_ERROR", startOfDay)
+
         return KpiDto(
             totalUsers = totalUsers,
             activeUsersToday = activeToday,
@@ -229,7 +233,10 @@ class AdminService(
             errorCountToday = errorsToday,
             rateLimitHitsToday = rateLimitHits,
             signupsThisWeek = signupsThisWeek,
-            avgReadinessScore = avgReadiness
+            avgReadinessScore = avgReadiness,
+            clientErrorsToday = clientErrorsToday,
+            authFailuresToday = authFailuresToday,
+            externalServiceErrorsToday = externalServiceErrorsToday
         )
     }
 }

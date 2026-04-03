@@ -1,5 +1,6 @@
 package com.nclex.ngn
 
+import com.nclex.audit.AuditLogger
 import com.nclex.exception.ExternalServiceException
 import com.nclex.config.RateLimitService
 import com.nclex.repository.ContentCacheRepository
@@ -16,6 +17,7 @@ class NGNCaseStudyService(
     private val webClient: WebClient.Builder,
     private val contentCacheRepository: ContentCacheRepository,
     private val rateLimitService: RateLimitService,
+    private val auditLogger: AuditLogger,
     @Value("\${claude.api.key:}") private val apiKey: String,
     @Value("\${claude.api.url:https://api.anthropic.com/v1/messages}") private val apiUrl: String,
     @Value("\${claude.api.model:claude-sonnet-4-20250514}") private val model: String
@@ -34,17 +36,36 @@ class NGNCaseStudyService(
         }
 
         // Try template first, then LLM generation, then fallback
-        return try {
-            generateFromLLM(topic, questionTypes, difficulty)
+        val result = try {
+            val r = generateFromLLM(topic, questionTypes, difficulty)
+            auditLogger.log(
+                eventType = "NGN_CASE_GENERATED",
+                userId = runCatching { UUID.fromString(userId) }.getOrNull(),
+                metadata = mapOf("topic" to topic, "source" to "LLM")
+            )
+            r
         } catch (e: Exception) {
             logger.warn("LLM generation failed, trying template fallback: ${e.message}")
             try {
-                generateFromTemplate(topic)
+                val r = generateFromTemplate(topic)
+                auditLogger.log(
+                    eventType = "NGN_CASE_GENERATED",
+                    userId = runCatching { UUID.fromString(userId) }.getOrNull(),
+                    metadata = mapOf("topic" to topic, "source" to "template")
+                )
+                r
             } catch (e2: Exception) {
                 logger.warn("Template fallback failed, returning MC fallback: ${e2.message}")
-                generateMCFallback(topic)
+                val r = generateMCFallback(topic)
+                auditLogger.log(
+                    eventType = "NGN_CASE_GENERATED",
+                    userId = runCatching { UUID.fromString(userId) }.getOrNull(),
+                    metadata = mapOf("topic" to topic, "source" to "fallback")
+                )
+                r
             }
         }
+        return result
     }
 
     fun safetyValidate(caseStudy: CaseStudyResponse): SafetyValidationResult {

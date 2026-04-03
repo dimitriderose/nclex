@@ -22,8 +22,30 @@ class ApiError extends Error {
   }
 }
 
+async function fetchWithRetry(url: string, options: RequestInit, maxAttempts = 3): Promise<Response> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      if (response.status >= 500 && attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000))
+        continue
+      }
+      return response
+    } catch (err) {
+      if (err instanceof TypeError && attempt < maxAttempts) {
+        // Network error - retry
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt - 1) * 1000))
+        continue
+      }
+      throw err
+    }
+  }
+  // Should not reach here, but satisfy TypeScript
+  return fetch(url, options)
+}
+
 async function authedFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetchWithRetry(`${BASE_URL}${path}`, {
     ...options,
     credentials: 'include',
     headers: {

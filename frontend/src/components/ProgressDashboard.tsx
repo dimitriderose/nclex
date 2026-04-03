@@ -3,6 +3,7 @@ import type { TopicAccuracy, NCJMMAccuracy, ReadinessBand, NCJMMStep, ReadinessA
 import { NCJMM_STEPS } from '../types/content';
 import type { UserStats, HistoryEntry } from '../types';
 import { api } from '../services/api';
+import { logger } from '../services/logger';
 import './ProgressDashboard.css';
 
 // NCLEX Test Plan topic weights (2023 blueprint)
@@ -51,7 +52,7 @@ export function ProgressDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getStats().then(setStats).catch(console.error).finally(() => setLoading(false));
+    api.getStats().then(setStats).catch((err) => logger.error('Failed to load stats', { error: String(err) })).finally(() => setLoading(false));
   }, []);
 
   const analysis = useMemo(() => {

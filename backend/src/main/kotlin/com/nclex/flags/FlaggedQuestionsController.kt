@@ -1,5 +1,6 @@
 package com.nclex.flags
 
+import com.nclex.audit.AuditLogger
 import com.nclex.exception.NotFoundException
 import com.nclex.exception.UnauthorizedException
 import com.nclex.model.FlagCategory
@@ -30,7 +31,8 @@ data class UpdateFlagRequest(
 @RestController
 @RequestMapping("/api/flags")
 class FlaggedQuestionsController(
-    private val flaggedQuestionRepository: FlaggedQuestionRepository
+    private val flaggedQuestionRepository: FlaggedQuestionRepository,
+    private val auditLogger: AuditLogger
 ) {
 
     @GetMapping
@@ -63,6 +65,11 @@ class FlaggedQuestionsController(
                 notes = body.notes
             )
         )
+        auditLogger.log(
+            eventType = "QUESTION_FLAGGED",
+            userId = userId,
+            metadata = mapOf("topic" to body.topic, "category" to body.category.name)
+        )
         return ResponseEntity.status(201).body(flag)
     }
 
@@ -82,6 +89,11 @@ class FlaggedQuestionsController(
         body.notes?.let { flag.notes = it }
         flag.updatedAt = Instant.now()
 
+        auditLogger.log(
+            eventType = "FLAG_UPDATED",
+            userId = userId,
+            metadata = mapOf("flagId" to id.toString())
+        )
         return ResponseEntity.ok(flaggedQuestionRepository.save(flag))
     }
 
@@ -96,6 +108,11 @@ class FlaggedQuestionsController(
         if (deleted == 0L) {
             throw NotFoundException("Flagged question not found")
         }
+        auditLogger.log(
+            eventType = "FLAG_DELETED",
+            userId = userId,
+            metadata = mapOf("flagId" to id.toString())
+        )
         return ResponseEntity.ok(mapOf("message" to "Deleted successfully"))
     }
 

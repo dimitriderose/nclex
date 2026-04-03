@@ -5,6 +5,7 @@ import { contentSetup } from './services/content-setup'
 import type { SetupProgress } from './services/content-setup'
 import type { AuthUser } from './types'
 import { OfflineBanner, SyncStatusIndicator } from './components/OfflineBanner'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { PracticePage } from './pages/PracticePage'
 import { NGNCasePage } from './pages/NGNCasePage'
 import { ReviewPage } from './pages/ReviewPage'
@@ -52,32 +53,34 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <OfflineBanner />
-      <Routes>
-        <Route
-          path="/login"
-          element={
-            user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />
-          }
-        />
-        <Route
-          path="/*"
-          element={
-            user ? (
-              <AuthenticatedApp
-                user={user}
-                onLogout={() => { api.logout(); setUser(null) }}
-                setupProgress={setupProgress}
-                setupDone={setupDone}
-              />
-            ) : (
-              <Navigate to="/login" />
-            )
-          }
-        />
-      </Routes>
-    </div>
+    <ErrorBoundary>
+      <div className="app">
+        <OfflineBanner />
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} />
+            }
+          />
+          <Route
+            path="/*"
+            element={
+              user ? (
+                <AuthenticatedApp
+                  user={user}
+                  onLogout={() => { api.logout(); setUser(null) }}
+                  setupProgress={setupProgress}
+                  setupDone={setupDone}
+                />
+              ) : (
+                <Navigate to="/login" />
+              )
+            }
+          />
+        </Routes>
+      </div>
+    </ErrorBoundary>
   )
 }
 

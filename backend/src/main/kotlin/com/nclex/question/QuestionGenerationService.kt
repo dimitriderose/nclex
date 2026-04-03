@@ -1,5 +1,6 @@
 package com.nclex.question
 
+import com.nclex.audit.AuditLogger
 import com.nclex.config.RateLimitService
 import com.nclex.exception.ExternalServiceException
 import com.nclex.exception.RateLimitException
@@ -16,6 +17,7 @@ class QuestionGenerationService(
     private val webClient: WebClient.Builder,
     private val contentCacheRepository: ContentCacheRepository,
     private val rateLimitService: RateLimitService,
+    private val auditLogger: AuditLogger,
     @Value("\${claude.api.key:}") private val apiKey: String,
     @Value("\${claude.api.url:https://api.anthropic.com/v1/messages}") private val apiUrl: String,
     @Value("\${claude.api.model:claude-sonnet-4-20250514}") private val model: String
@@ -56,6 +58,12 @@ class QuestionGenerationService(
 
         // Step 2: Validate NCJMM tag
         val validation = validateNCJMMTag(question.stem, question.ncjmmStep, question.rationale)
+
+        auditLogger.log(
+            eventType = "QUESTION_GENERATED",
+            userId = runCatching { UUID.fromString(userId) }.getOrNull(),
+            metadata = mapOf("topic" to topic, "questionType" to questionType, "ncjmmStep" to (ncjmmStep ?: "auto"))
+        )
 
         return if (validation.isValid) {
             question.copy(ncjmmValidated = true)

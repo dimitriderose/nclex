@@ -1,5 +1,6 @@
 package com.nclex.stats
 
+import com.nclex.audit.AuditLogger
 import com.nclex.exception.NotFoundException
 import com.nclex.exception.UnauthorizedException
 import com.nclex.model.UserStats
@@ -22,7 +23,8 @@ data class UpdateStatsRequest(
 @RestController
 @RequestMapping("/api/stats")
 class UserStatsController(
-    private val userStatsRepository: UserStatsRepository
+    private val userStatsRepository: UserStatsRepository,
+    private val auditLogger: AuditLogger
 ) {
 
     @GetMapping
@@ -51,6 +53,7 @@ class UserStatsController(
         stats.lastActiveAt = Instant.now()
         stats.updatedAt = Instant.now()
 
+        auditLogger.log(eventType = "STATS_UPDATED", userId = userId)
         return ResponseEntity.ok(userStatsRepository.save(stats))
     }
 
@@ -85,6 +88,7 @@ class UserStatsController(
         stats.lastActiveAt = Instant.now()
         stats.updatedAt = Instant.now()
 
+        auditLogger.log(eventType = "HISTORY_APPENDED", userId = userId)
         return ResponseEntity.ok(userStatsRepository.save(stats))
     }
 

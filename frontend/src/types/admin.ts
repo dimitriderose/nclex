@@ -52,4 +52,7 @@ export interface KpiDto {
   rateLimitHitsToday: number
   signupsThisWeek: number
   avgReadinessScore: number
+  clientErrorsToday: number
+  authFailuresToday: number
+  externalServiceErrorsToday: number
 }

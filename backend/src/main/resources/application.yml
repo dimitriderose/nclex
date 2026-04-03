@@ -55,3 +55,10 @@ nclex:
     time-limit-minutes: ${EXAM_TIME_LIMIT:300}
   readiness:
     snapshot-cron: ${READINESS_SNAPSHOT_CRON:0 0 4 * * ?}  # 4 AM daily
+
+logging:
+  level:
+    root: INFO
+    com.nclex: DEBUG
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
