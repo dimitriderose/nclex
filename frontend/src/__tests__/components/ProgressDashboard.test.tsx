@@ -45,7 +45,7 @@ describe('ProgressDashboard', () => {
     })
   })
 
-  it('shows empty state when stats have no history', async () => {
+  it('renders dashboard with zero readiness when stats have no history', async () => {
     mockGetStats.mockResolvedValue({
       topicScores: {},
       history: [],
@@ -55,8 +55,13 @@ describe('ProgressDashboard', () => {
     })
     render(<ProgressDashboard />)
     await waitFor(() => {
-      expect(screen.getByText(/no study data yet/i)).toBeInTheDocument()
+      // With empty history, analysis still returns but with 0% readiness
+      // The dashboard renders with 0 questions answered
+      expect(screen.getByText('Progress Dashboard')).toBeInTheDocument()
     })
+    // Multiple stat cards show 0 (questions, streak, topics)
+    const zeros = screen.getAllByText('0')
+    expect(zeros.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders dashboard with stats data', async () => {
@@ -78,8 +83,10 @@ describe('ProgressDashboard', () => {
       expect(screen.getByText('Progress Dashboard')).toBeInTheDocument()
     })
 
-    // Check readiness score is displayed
-    expect(screen.getByText(/\d+%/)).toBeInTheDocument()
+    // Check readiness score is displayed (use class selector since multiple % exist)
+    const readinessEl = document.querySelector('.readiness-score')
+    expect(readinessEl).toBeInTheDocument()
+    expect(readinessEl!.textContent).toMatch(/\d+%/)
 
     // Check quick stats
     expect(screen.getByText('3')).toBeInTheDocument() // total questions

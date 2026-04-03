@@ -47,15 +47,10 @@ const mockExamStart = {
 
 describe('ExamSimulation', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
     mockStartExam.mockReset()
     mockSubmitAnswer.mockReset()
     mockFinishExam.mockReset()
     mockGetExamHistory.mockReset()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   // ── Start Screen ─────────────────────────────────────────────

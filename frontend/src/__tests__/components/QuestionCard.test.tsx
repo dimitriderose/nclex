@@ -402,8 +402,9 @@ describe('QuestionCard', () => {
     fireEvent.click(screen.getByText('60-100 bpm'))
     fireEvent.click(screen.getByRole('button', { name: /submit answer/i }))
 
-    // Check mark character
-    expect(screen.getByText('\u2713')).toBeInTheDocument()
+    const correctBtn = screen.getByText('60-100 bpm').closest('button')!
+    const checkSpan = correctBtn.querySelector('.option-check')
+    expect(checkSpan).toBeInTheDocument()
   })
 
   it('shows X mark on incorrectly selected options after submit', () => {
@@ -412,7 +413,9 @@ describe('QuestionCard', () => {
     fireEvent.click(screen.getByText('40-60 bpm'))
     fireEvent.click(screen.getByRole('button', { name: /submit answer/i }))
 
-    expect(screen.getByText('\u2717')).toBeInTheDocument()
+    const incorrectBtn = screen.getByText('40-60 bpm').closest('button')!
+    const xSpan = incorrectBtn.querySelector('.option-x')
+    expect(xSpan).toBeInTheDocument()
   })
 
   it('does not change selection after submission', () => {
