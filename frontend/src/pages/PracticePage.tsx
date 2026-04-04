@@ -5,7 +5,7 @@ import { questionService } from '../services/question-service'
 import { offlineBank } from '../services/offline-bank'
 import { syncQueue } from '../services/sync-queue'
 import { api } from '../services/api'
-import type { GeneratedQuestion, QuestionType, NCJMMStep } from '../types/content'
+import type { GeneratedQuestion, QuestionType } from '../types/content'
 
 const TOPICS = [
   'Pharmacological Therapies', 'Management of Care', 'Safety and Infection Control',

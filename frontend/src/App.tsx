@@ -24,7 +24,7 @@ function App() {
     api.getMe()
       .then((data) => {
         if (data.authenticated) {
-          setUser(data as AuthUser)
+          setUser(data as unknown as AuthUser)
         }
       })
       .catch(() => {})
@@ -178,7 +178,7 @@ function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
       }
       const me = await api.getMe()
       if (me.authenticated) {
-        onLogin(me as AuthUser)
+        onLogin(me as unknown as AuthUser)
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'An error occurred'
