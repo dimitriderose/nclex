@@ -10,10 +10,11 @@ function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
 }
 
 describe('ErrorBoundary', () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>
+  let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok'))
+    fetchSpy = vi.fn().mockResolvedValue(new Response('ok'))
+    vi.stubGlobal('fetch', fetchSpy)
     // Suppress React error boundary console.error noise
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -85,7 +86,7 @@ describe('ErrorBoundary', () => {
       expect(fetchSpy).toHaveBeenCalled()
     })
 
-    const [url, options] = fetchSpy.mock.calls[0]
+    const [url, options] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/errors/report')
     expect(options.method).toBe('POST')
     const body = JSON.parse(options.body as string)

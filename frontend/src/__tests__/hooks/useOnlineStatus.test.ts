@@ -79,7 +79,7 @@ describe('useOnlineStatus', () => {
   it('flushes sync queue on online event', async () => {
     mockFlush.mockResolvedValue({ success: 2, failed: 0 })
 
-    const { result } = renderHook(() => useOnlineStatus())
+    renderHook(() => useOnlineStatus())
 
     await act(async () => {
       window.dispatchEvent(new Event('online'))

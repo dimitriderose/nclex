@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 describe('registerServiceWorker', () => {
-  let originalNavigator: any
   let addEventListenerSpy: ReturnType<typeof vi.fn>
   let loadCallback: (() => void) | null = null
 

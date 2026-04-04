@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../test/mocks/server'
 import { api } from '../../services/api'
@@ -46,7 +46,6 @@ describe('api service', () => {
         http.get('/api/auth/me', () => new HttpResponse(null, { status: 401 }))
       )
 
-      const originalHref = window.location.href
       // Mock window.location
       const locationDescriptor = Object.getOwnPropertyDescriptor(window, 'location')
       const mockLocation = { ...window.location, href: 'http://localhost/dashboard', pathname: '/dashboard' }

@@ -19,7 +19,7 @@ describe('staticData', () => {
   })
 
   it('each module has a _meta object', () => {
-    for (const [key, mod] of Object.entries(staticData)) {
+    for (const [, mod] of Object.entries(staticData)) {
       expect(mod).toHaveProperty('_meta')
       expect((mod._meta as any).name).toBeTruthy()
       expect((mod._meta as any).version).toBe(1)

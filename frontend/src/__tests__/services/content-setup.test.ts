@@ -28,7 +28,7 @@ vi.mock('../../data/static-modules', () => ({
 }))
 
 import { contentSetup } from '../../services/content-setup'
-import { localStorageManager, STATIC_MODULES } from '../../services/localstorage-manager'
+import { localStorageManager } from '../../services/localstorage-manager'
 import { indexedDBStore } from '../../services/indexeddb-store'
 
 describe('contentSetup', () => {
