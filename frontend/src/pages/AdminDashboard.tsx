@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { adminApi } from '../services/admin-api'
+import { logger } from '../services/logger'
 import type {
   AdminUserDto, AuditLogEntry, QuestionReportDto,
   ContentCacheStatusDto, KpiDto
@@ -60,7 +61,7 @@ function UsersPanel() {
       setUsers(data.users)
       setTotalPages(data.totalPages)
     } catch (err) {
-      console.error('Failed to load users:', err)
+      logger.error('Failed to load users', { error: String(err) })
     } finally {
       setLoading(false)
     }
@@ -161,7 +162,7 @@ function AuditLogPanel() {
       setLogs(data.logs)
       setTotalPages(data.totalPages)
     } catch (err) {
-      console.error('Failed to load audit log:', err)
+      logger.error('Failed to load audit log', { error: String(err) })
     } finally {
       setLoading(false)
     }
@@ -188,11 +189,16 @@ function AuditLogPanel() {
           <option value="REGISTER">Register</option>
           <option value="LOGOUT">Logout</option>
           <option value="CLAUDE_CHAT">Claude Chat</option>
-          <option value="RATE_LIMIT_HIT">Rate Limit</option>
           <option value="ERROR">Error</option>
           <option value="ADMIN_ROLE_CHANGE">Role Change</option>
           <option value="ADMIN_SOFT_DELETE">Soft Delete</option>
           <option value="ADMIN_HARD_DELETE">Hard Delete</option>
+          <option value="VALIDATION_ERROR">Validation Error</option>
+          <option value="AUTH_FAILURE">Auth Failure</option>
+          <option value="EXTERNAL_SERVICE_ERROR">External Service Error</option>
+          <option value="CLIENT_ERROR">Client Error</option>
+          <option value="RATE_LIMIT_HIT">Rate Limit Hit</option>
+          <option value="NOT_FOUND_ERROR">Not Found Error</option>
         </select>
         <button className="btn-primary" onClick={handleExport}>Export CSV</button>
         <span className="admin-count">{loading ? 'Loading...' : `Page ${page + 1} of ${totalPages || 1}`}</span>
@@ -243,7 +249,7 @@ function ReportsPanel() {
       setReports(data.reports)
       setTotalPages(data.totalPages)
     } catch (err) {
-      console.error('Failed to load reports:', err)
+      logger.error('Failed to load reports', { error: String(err) })
     }
   }, [status, page])
 
@@ -316,7 +322,7 @@ function ContentCachePanel() {
       const data = await adminApi.getContentCacheStatus()
       setCacheStatus(data)
     } catch (err) {
-      console.error('Failed to load cache status:', err)
+      logger.error('Failed to load cache status', { error: String(err) })
     }
   }, [])
 
@@ -389,7 +395,7 @@ function KpiPanel() {
   useEffect(() => {
     adminApi.getKpis()
       .then(setKpis)
-      .catch(console.error)
+      .catch((err) => logger.error('Failed to load KPIs', { error: String(err) }))
       .finally(() => setLoading(false))
   }, [])
 
@@ -405,6 +411,9 @@ function KpiPanel() {
     { label: 'Rate Limits Today', value: kpis.rateLimitHitsToday, icon: 'shield', warn: kpis.rateLimitHitsToday > 0 },
     { label: 'Signups This Week', value: kpis.signupsThisWeek, icon: 'plus' },
     { label: 'Avg Readiness', value: kpis.avgReadinessScore.toFixed(1), icon: 'target' },
+    { label: 'Client Errors Today', value: kpis.clientErrorsToday, icon: 'alert', warn: kpis.clientErrorsToday > 0 },
+    { label: 'Auth Failures Today', value: kpis.authFailuresToday, icon: 'alert', warn: kpis.authFailuresToday > 0 },
+    { label: 'External Svc Errors', value: kpis.externalServiceErrorsToday, icon: 'alert', warn: kpis.externalServiceErrorsToday > 0 },
   ]
 
   return (

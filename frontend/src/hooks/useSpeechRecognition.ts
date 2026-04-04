@@ -1,5 +1,27 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
+// Web Speech API type declarations (not in all TS libs)
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
+  onresult: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionEvent) => void) | null;
+  onerror: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionErrorEvent) => void) | null;
+  onend: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
+  start(): void;
+  stop(): void;
+}
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance;
+}
+
 interface SpeechRecognitionHook {
   isListening: boolean;
   transcript: string;
@@ -14,14 +36,16 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  const SpeechRecognition =
+  const SpeechRecognitionCtor: SpeechRecognitionConstructor | null =
     typeof window !== 'undefined'
-      ? window.SpeechRecognition || (window as unknown as { webkitSpeechRecognition: typeof window.SpeechRecognition }).webkitSpeechRecognition
+      ? (window as unknown as { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition ||
+        (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition ||
+        null
       : null;
 
-  const isSupported = !!SpeechRecognition;
+  const isSupported = !!SpeechRecognitionCtor;
 
   useEffect(() => {
     return () => {
@@ -32,13 +56,13 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
   }, []);
 
   const startListening = useCallback(() => {
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionCtor) {
       setError('Speech recognition not supported in this browser');
       return;
     }
 
     setError(null);
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
@@ -62,7 +86,7 @@ export function useSpeechRecognition(): SpeechRecognitionHook {
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [SpeechRecognition]);
+  }, [SpeechRecognitionCtor]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {

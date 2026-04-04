@@ -14,7 +14,7 @@ export function ExamSimulation() {
   const [currentQuestion, setCurrentQuestion] = useState<ExamQuestion | null>(null)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [questionsAnswered, setQuestionsAnswered] = useState(0)
-  const [currentDifficulty, setCurrentDifficulty] = useState(0.5)
+  const [, setCurrentDifficulty] = useState(0.5)
   const [timeLimitMinutes, setTimeLimitMinutes] = useState(300)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [results, setResults] = useState<ExamResults | null>(null)

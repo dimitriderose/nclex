@@ -72,7 +72,7 @@ export const contentDB = {
       case 'api': {
         try {
           const data = await contentApi.getCachedContent(contentKey);
-          return { source: 'api', key: contentKey, data, cached: true };
+          return { source: 'api', key: contentKey, data: data as unknown as Record<string, unknown>, cached: true };
         } catch {
           return null;
         }

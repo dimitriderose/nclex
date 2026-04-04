@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { NGNCaseStudy as CaseStudyType, NGNCaseTab, NGNCaseQuestion } from '../types/content';
+import type { NGNCaseStudy as CaseStudyType, NGNCaseQuestion } from '../types/content';
 import './NGNCaseStudy.css';
 
 interface NGNCaseStudyProps {

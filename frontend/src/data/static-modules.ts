@@ -179,6 +179,6 @@ export const staticData: Record<StaticModule, Record<string, unknown>> = {
     _meta: { name: 'Immunization Schedule Essentials', version: 1 },
     live_vaccines: { vaccines: ['MMR', 'Varicella', 'Rotavirus', 'Intranasal flu (FluMist)', 'BCG', 'Yellow fever'], rules: ['Contraindicated in pregnancy', 'Contraindicated in immunocompromised', 'Give all live vaccines same day or wait 28 days'] },
     inactivated_vaccines: { vaccines: ['DTaP/Tdap', 'IPV', 'Hep A', 'Hep B', 'Influenza (injection)', 'Pneumococcal', 'HPV', 'Meningococcal'], rules: ['Can be given at any interval', 'Safe in immunocompromised'] },
-    nclex_rules: ['Check for egg allergy (flu vaccine)', 'Check for gelatin/neomycin allergy (MMR, Varicella)', 'Withhold live vaccines if on immunosuppressants', 'Pregnancy: give Tdap (27-36 weeks), flu; avoid live vaccines'] },
+    nclex_rules: ['Check for egg allergy (flu vaccine)', 'Check for gelatin/neomycin allergy (MMR, Varicella)', 'Withhold live vaccines if on immunosuppressants', 'Pregnancy: give Tdap (27-36 weeks), flu; avoid live vaccines'],
   },
 };

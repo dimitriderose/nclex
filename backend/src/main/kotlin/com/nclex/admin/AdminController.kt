@@ -207,5 +207,8 @@ data class KpiDto(
     val errorCountToday: Long,
     val rateLimitHitsToday: Long,
     val signupsThisWeek: Long,
-    val avgReadinessScore: Double
+    val avgReadinessScore: Double,
+    val clientErrorsToday: Long,
+    val authFailuresToday: Long,
+    val externalServiceErrorsToday: Long
 )

@@ -1,5 +1,6 @@
 package com.nclex.reading
 
+import com.nclex.audit.AuditLogger
 import com.nclex.exception.UnauthorizedException
 import com.nclex.model.ReadingPosition
 import com.nclex.repository.ReadingPositionRepository
@@ -18,7 +19,8 @@ data class ReadingPositionRequest(
 @RestController
 @RequestMapping("/api/reading-positions")
 class ReadingPositionController(
-    private val readingPositionRepository: ReadingPositionRepository
+    private val readingPositionRepository: ReadingPositionRepository,
+    private val auditLogger: AuditLogger
 ) {
 
     @GetMapping
@@ -60,6 +62,11 @@ class ReadingPositionController(
             )
         }
 
+        auditLogger.log(
+            eventType = "READING_POSITION_SAVED",
+            userId = userId,
+            metadata = mapOf("contentKey" to body.contentKey)
+        )
         return ResponseEntity.ok(pos)
     }
 

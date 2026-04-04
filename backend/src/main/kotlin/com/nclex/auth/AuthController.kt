@@ -53,7 +53,7 @@ class AuthController(
         val token = jwtUtil.createToken(user.id, user.email, user.role.name, user.tokenVersion)
         jwtUtil.addTokenCookie(response, token)
 
-        auditLogger.log("USER_REGISTERED", user.id, metadata = mapOf("email" to user.email), ip = clientIp)
+        auditLogger.log("USER_REGISTERED", user.id, metadata = mapOf("email" to user.email), ipAddress = clientIp)
 
         return ResponseEntity.ok(AuthResponse("Registration successful", user.email))
     }
@@ -73,7 +73,7 @@ class AuthController(
         val token = jwtUtil.createToken(user.id, user.email, user.role.name, user.tokenVersion)
         jwtUtil.addTokenCookie(response, token)
 
-        auditLogger.log("USER_LOGIN", user.id, metadata = mapOf("email" to user.email), ip = clientIp)
+        auditLogger.log("USER_LOGIN", user.id, metadata = mapOf("email" to user.email), ipAddress = clientIp)
 
         return ResponseEntity.ok(AuthResponse("Login successful", user.email))
     }
