@@ -13,8 +13,8 @@ vi.mock('../../services/localstorage-manager', () => ({
   localStorageManager: {
     get: vi.fn(),
     set: vi.fn(),
-    getAllKeys: vi.fn(),
     search: vi.fn(),
+    getAllKeys: vi.fn(),
   },
 }))
 
@@ -45,6 +45,14 @@ describe('contentDB', () => {
       expect(contentDB.getLayer('labs')).toBe('localStorage')
     })
 
+    it('routes formulas to localStorage', () => {
+      expect(contentDB.getLayer('formulas')).toBe('localStorage')
+    })
+
+    it('routes strategies to localStorage', () => {
+      expect(contentDB.getLayer('strategies')).toBe('localStorage')
+    })
+
     it('routes openrn to indexedDB', () => {
       expect(contentDB.getLayer('openrn')).toBe('indexedDB')
     })
@@ -57,104 +65,117 @@ describe('contentDB', () => {
       expect(contentDB.getLayer('fda')).toBe('api')
     })
 
-    it('routes prefixed keys by prefix (drugs:metformin -> localStorage)', () => {
+    it('routes medlineplus to api', () => {
+      expect(contentDB.getLayer('medlineplus')).toBe('api')
+    })
+
+    it('routes prefix match (drugs:metformin) to localStorage', () => {
       expect(contentDB.getLayer('drugs:metformin')).toBe('localStorage')
     })
 
-    it('routes unknown keys to api', () => {
+    it('routes unknown keys to api by default', () => {
       expect(contentDB.getLayer('unknown_key')).toBe('api')
     })
   })
 
   describe('get', () => {
-    it('gets from localStorage for static module keys', async () => {
-      const data = { name: 'test' }
-      vi.mocked(localStorageManager.get).mockReturnValue(data)
-
+    it('gets from localStorage for static modules', async () => {
+      vi.mocked(localStorageManager.get).mockReturnValue({ name: 'test' })
       const result = await contentDB.get('drugs')
-      expect(result).toEqual({ source: 'localStorage', key: 'drugs', data, cached: true })
-      expect(localStorageManager.get).toHaveBeenCalledWith('drugs')
+      expect(result).toEqual({
+        source: 'localStorage',
+        key: 'drugs',
+        data: { name: 'test' },
+        cached: true,
+      })
     })
 
-    it('returns null from localStorage when not found', async () => {
+    it('returns null when localStorage has no data', async () => {
       vi.mocked(localStorageManager.get).mockReturnValue(null)
       const result = await contentDB.get('drugs')
       expect(result).toBeNull()
     })
 
-    it('gets from indexedDB for textbook keys', async () => {
-      const data = { chapter: 1 }
-      vi.mocked(indexedDBStore.get).mockResolvedValue(data)
-
+    it('gets from indexedDB for textbook content', async () => {
+      vi.mocked(indexedDBStore.get).mockResolvedValue({ chapter: 1 })
       const result = await contentDB.get('openrn')
-      expect(result).toEqual({ source: 'indexedDB', key: 'openrn', data, cached: true })
+      expect(result).toEqual({
+        source: 'indexedDB',
+        key: 'openrn',
+        data: { chapter: 1 },
+        cached: true,
+      })
     })
 
-    it('returns null from indexedDB when not found', async () => {
+    it('returns null when indexedDB has no data', async () => {
       vi.mocked(indexedDBStore.get).mockResolvedValue(null)
       const result = await contentDB.get('textbook')
       expect(result).toBeNull()
     })
 
-    it('gets from API for api-layer keys', async () => {
-      const data = { label: 'Metformin HCl' }
-      vi.mocked(contentApi.getCachedContent).mockResolvedValue(data as any)
-
+    it('gets from API for fda content', async () => {
+      vi.mocked(contentApi.getCachedContent).mockResolvedValue({ label: 'test' } as any)
       const result = await contentDB.get('fda')
-      expect(result).toEqual({ source: 'api', key: 'fda', data, cached: true })
+      expect(result).toEqual({
+        source: 'api',
+        key: 'fda',
+        data: { label: 'test' },
+        cached: true,
+      })
     })
 
-    it('returns null when API throws', async () => {
-      vi.mocked(contentApi.getCachedContent).mockRejectedValue(new Error('offline'))
+    it('returns null when API call fails', async () => {
+      vi.mocked(contentApi.getCachedContent).mockRejectedValue(new Error('Network error'))
       const result = await contentDB.get('fda')
       expect(result).toBeNull()
     })
   })
 
   describe('set', () => {
-    it('sets to localStorage for static module keys', async () => {
-      const data = { name: 'test' }
-      await contentDB.set('drugs', data)
-      expect(localStorageManager.set).toHaveBeenCalledWith('drugs', data)
+    it('sets to localStorage for static modules', async () => {
+      await contentDB.set('drugs', { name: 'metformin' })
+      expect(localStorageManager.set).toHaveBeenCalledWith('drugs', { name: 'metformin' })
     })
 
-    it('sets to indexedDB for textbook keys', async () => {
-      const data = { chapter: 1 }
+    it('sets to indexedDB for textbook content', async () => {
       vi.mocked(indexedDBStore.put).mockResolvedValue()
-      await contentDB.set('openrn', data)
-      expect(indexedDBStore.put).toHaveBeenCalledWith('openrn', data)
+      await contentDB.set('openrn', { chapter: 1 })
+      expect(indexedDBStore.put).toHaveBeenCalledWith('openrn', { chapter: 1 })
     })
 
-    it('sets to API for api-layer keys', async () => {
-      const data = { label: 'test' }
-      vi.mocked(contentApi.setCachedContent).mockResolvedValue({} as any)
-      await contentDB.set('fda', data)
+    it('sets to API for fda content', async () => {
+      vi.mocked(contentApi.setCachedContent).mockResolvedValue(undefined as any)
+      await contentDB.set('fda', { label: 'aspirin' }, 'fda_source')
       expect(contentApi.setCachedContent).toHaveBeenCalledWith({
         contentKey: 'fda',
-        source: 'manual',
-        data,
+        source: 'fda_source',
+        data: { label: 'aspirin' },
         ttlDays: 30,
       })
     })
 
-    it('uses provided source for API layer', async () => {
-      vi.mocked(contentApi.setCachedContent).mockResolvedValue({} as any)
-      await contentDB.set('fda', {}, 'fda_api')
+    it('uses "manual" as default source for API sets', async () => {
+      vi.mocked(contentApi.setCachedContent).mockResolvedValue(undefined as any)
+      await contentDB.set('fda', { label: 'test' })
       expect(contentApi.setCachedContent).toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'fda_api' })
+        expect.objectContaining({ source: 'manual' })
       )
     })
   })
 
   describe('search', () => {
-    it('searches across all layers by default', async () => {
-      vi.mocked(localStorageManager.search).mockReturnValue([{ key: 'drugs', data: { x: 1 } }])
-      vi.mocked(indexedDBStore.search).mockResolvedValue([{ key: 'openrn:ch1', data: { y: 2 } }])
+    it('searches all layers by default', async () => {
+      vi.mocked(localStorageManager.search).mockReturnValue([
+        { key: 'drugs', data: { name: 'aspirin' } },
+      ])
+      vi.mocked(indexedDBStore.search).mockResolvedValue([
+        { key: 'openrn:ch1', data: { title: 'Chapter 1' } },
+      ])
       vi.mocked(contentApi.searchContent).mockResolvedValue([
-        { contentKey: 'fda:med', data: { z: 3 } } as any,
+        { contentKey: 'fda:aspirin', data: { label: 'Aspirin' } } as any,
       ])
 
-      const results = await contentDB.search('test')
+      const results = await contentDB.search('aspirin')
       expect(results).toHaveLength(3)
       expect(results[0].source).toBe('localStorage')
       expect(results[1].source).toBe('indexedDB')
@@ -162,15 +183,23 @@ describe('contentDB', () => {
     })
 
     it('searches only specified layers', async () => {
-      vi.mocked(localStorageManager.search).mockReturnValue([{ key: 'drugs', data: {} }])
-
+      vi.mocked(localStorageManager.search).mockReturnValue([])
       const results = await contentDB.search('test', ['localStorage'])
-      expect(results).toHaveLength(1)
+      expect(localStorageManager.search).toHaveBeenCalled()
       expect(indexedDBStore.search).not.toHaveBeenCalled()
       expect(contentApi.searchContent).not.toHaveBeenCalled()
+      expect(results).toEqual([])
     })
 
-    it('gracefully handles API search failure', async () => {
+    it('searches only indexedDB layer when specified', async () => {
+      vi.mocked(indexedDBStore.search).mockResolvedValue([])
+      const results = await contentDB.search('test', ['indexedDB'])
+      expect(indexedDBStore.search).toHaveBeenCalledWith('test')
+      expect(localStorageManager.search).not.toHaveBeenCalled()
+      expect(results).toEqual([])
+    })
+
+    it('handles API search failure gracefully', async () => {
       vi.mocked(localStorageManager.search).mockReturnValue([])
       vi.mocked(indexedDBStore.search).mockResolvedValue([])
       vi.mocked(contentApi.searchContent).mockRejectedValue(new Error('offline'))
@@ -181,13 +210,13 @@ describe('contentDB', () => {
   })
 
   describe('getKeys', () => {
-    it('returns localStorage keys', async () => {
+    it('gets keys from localStorage', async () => {
       vi.mocked(localStorageManager.getAllKeys).mockReturnValue(['drugs', 'labs'])
       const keys = await contentDB.getKeys('localStorage')
       expect(keys).toEqual(['drugs', 'labs'])
     })
 
-    it('returns indexedDB keys', async () => {
+    it('gets keys from indexedDB', async () => {
       vi.mocked(indexedDBStore.getAllKeys).mockResolvedValue(['openrn:ch1'])
       const keys = await contentDB.getKeys('indexedDB')
       expect(keys).toEqual(['openrn:ch1'])

@@ -1,245 +1,221 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Build a fake IndexedDB environment
-function createMockIDB() {
-  const entries = new Map<string, unknown>()
+// Build a fake IndexedDB that works with the store's Promise-based wrappers
+let storeData: Map<string, any>
 
-  const mockStore: Record<string, unknown> = {
-    get: vi.fn((key: string) => {
-      const req = createRequest(entries.get(key))
-      return req
-    }),
-    put: vi.fn((entry: { key: string }) => {
-      entries.set(entry.key, entry)
-      return createRequest(undefined)
-    }),
-    delete: vi.fn((key: string) => {
-      entries.delete(key)
-      return createRequest(undefined)
-    }),
-    getAllKeys: vi.fn(() => createRequest([...entries.keys()])),
-    getAll: vi.fn(() => createRequest([...entries.values()])),
-    count: vi.fn(() => createRequest(entries.size)),
-    clear: vi.fn(() => {
-      entries.clear()
-      return createRequest(undefined)
-    }),
-    index: vi.fn(() => ({
-      getAll: vi.fn((source: string) => {
-        const filtered = [...entries.values()].filter((e: any) => e.source === source)
-        return createRequest(filtered)
-      }),
-    })),
-    createIndex: vi.fn(),
-  }
-
-  const mockObjectStoreNames = {
-    contains: vi.fn().mockReturnValue(false),
-  }
-
-  const mockTransaction: Record<string, unknown> = {
-    objectStore: vi.fn(() => mockStore),
-    oncomplete: null as (() => void) | null,
-    onerror: null as (() => void) | null,
-  }
-
-  const mockDB: Record<string, unknown> = {
-    transaction: vi.fn(() => mockTransaction),
-    objectStoreNames: mockObjectStoreNames,
-    createObjectStore: vi.fn(() => mockStore),
-  }
-
-  function createRequest(result: unknown) {
-    const req: Record<string, unknown> = {
-      result,
-      onsuccess: null as (() => void) | null,
-      onerror: null as (() => void) | null,
-      error: null,
-    }
-    // Trigger onsuccess asynchronously
-    Promise.resolve().then(() => {
-      if (typeof req.onsuccess === 'function') req.onsuccess()
-    })
-    return req
-  }
-
-  const mockOpenRequest: Record<string, unknown> = {
-    result: mockDB,
-    onsuccess: null as (() => void) | null,
-    onerror: null as (() => void) | null,
-    onupgradeneeded: null as (() => void) | null,
-    error: null,
-  }
-
-  const mockIndexedDB = {
-    open: vi.fn(() => {
-      Promise.resolve().then(() => {
-        // Trigger onupgradeneeded first
-        if (typeof mockOpenRequest.onupgradeneeded === 'function') {
-          mockOpenRequest.onupgradeneeded()
-        }
-        if (typeof mockOpenRequest.onsuccess === 'function') {
-          mockOpenRequest.onsuccess()
-        }
-      })
-      return mockOpenRequest
-    }),
-  }
-
-  return { mockIndexedDB, mockDB, mockStore, mockTransaction, entries }
+function createFakeRequest(result: any) {
+  const req: any = { result, error: null, onsuccess: null, onerror: null }
+  queueMicrotask(() => { if (req.onsuccess) req.onsuccess() })
+  return req
 }
 
-let mockIDB: ReturnType<typeof createMockIDB>
-
-beforeEach(() => {
-  vi.resetModules()
-  mockIDB = createMockIDB()
-  vi.stubGlobal('indexedDB', mockIDB.mockIndexedDB)
-})
-
-describe('indexedDBStore', () => {
-  async function getStore() {
-    const mod = await import('../../services/indexeddb-store')
-    return mod.indexedDBStore
+function createFakeStore() {
+  return {
+    get: vi.fn((key: string) => createFakeRequest(storeData.get(key))),
+    put: vi.fn((entry: any) => { storeData.set(entry.key ?? entry, entry); return createFakeRequest(undefined) }),
+    delete: vi.fn((key: string) => { storeData.delete(key); return createFakeRequest(undefined) }),
+    getAllKeys: vi.fn(() => createFakeRequest([...storeData.keys()])),
+    getAll: vi.fn(() => createFakeRequest([...storeData.values()])),
+    count: vi.fn(() => createFakeRequest(storeData.size)),
+    clear: vi.fn(() => { storeData.clear(); return createFakeRequest(undefined) }),
+    createIndex: vi.fn(),
+    index: vi.fn(() => ({
+      getAll: vi.fn((source: string) =>
+        createFakeRequest([...storeData.values()].filter((e) => e.source === source))
+      ),
+    })),
   }
+}
 
-  it('get returns data when entry exists', async () => {
-    const entry = { key: 'openrn:ch1', data: { title: 'Chapter 1' }, source: 'openrn', title: 'Ch1', chapter: 1, content: '', updatedAt: '' }
-    mockIDB.entries.set('openrn:ch1', entry)
+let fakeStore: ReturnType<typeof createFakeStore>
 
-    const store = await getStore()
-    const result = await store.get('openrn:ch1')
-    expect(result).toEqual({ title: 'Chapter 1' })
-  })
+const fakeObjectStoreNames = { contains: vi.fn().mockReturnValue(false) }
 
-  it('get returns null when entry does not exist', async () => {
-    const store = await getStore()
-    const result = await store.get('nonexistent')
-    expect(result).toBeNull()
-  })
-
-  it('put stores an entry with derived fields', async () => {
-    const store = await getStore()
-    await store.put('openrn:ch1', { title: 'Chapter 1', chapter: 1, content: 'text' })
-    expect(mockIDB.mockStore.put).toHaveBeenCalled()
-    const putArg = vi.mocked(mockIDB.mockStore.put as any).mock.calls[0][0]
-    expect(putArg.key).toBe('openrn:ch1')
-    expect(putArg.source).toBe('openrn')
-    expect(putArg.title).toBe('Chapter 1')
-  })
-
-  it('put defaults source to unknown when no colon in key', async () => {
-    const store = await getStore()
-    await store.put('singlekey', { title: 'Test' })
-    const putArg = vi.mocked(mockIDB.mockStore.put as any).mock.calls[0][0]
-    expect(putArg.source).toBe('singlekey')
-  })
-
-  it('put uses key as title when data.title is missing', async () => {
-    const store = await getStore()
-    await store.put('openrn:ch1', {})
-    const putArg = vi.mocked(mockIDB.mockStore.put as any).mock.calls[0][0]
-    expect(putArg.title).toBe('openrn:ch1')
-    expect(putArg.chapter).toBe(0)
-    expect(putArg.content).toBe('')
-  })
-
-  it('delete removes an entry', async () => {
-    const store = await getStore()
-    await store.delete('openrn:ch1')
-    expect(mockIDB.mockStore.delete).toHaveBeenCalled()
-  })
-
-  it('getAllKeys returns all keys', async () => {
-    mockIDB.entries.set('a', {})
-    mockIDB.entries.set('b', {})
-    const store = await getStore()
-    const keys = await store.getAllKeys()
-    expect(keys).toEqual(['a', 'b'])
-  })
-
-  it('count returns entry count', async () => {
-    mockIDB.entries.set('a', {})
-    mockIDB.entries.set('b', {})
-    const store = await getStore()
-    const c = await store.count()
-    expect(c).toBe(2)
-  })
-
-  it('clear removes all entries', async () => {
-    mockIDB.entries.set('a', {})
-    const store = await getStore()
-    await store.clear()
-    expect(mockIDB.mockStore.clear).toHaveBeenCalled()
-  })
-
-  it('getBySource queries the source index', async () => {
-    mockIDB.entries.set('openrn:ch1', { key: 'openrn:ch1', source: 'openrn', title: 'Ch1', chapter: 1, content: '', data: {}, updatedAt: '' })
-    mockIDB.entries.set('openstax:ch1', { key: 'openstax:ch1', source: 'openstax', title: 'Ch1', chapter: 1, content: '', data: {}, updatedAt: '' })
-
-    const store = await getStore()
-    const results = await store.getBySource('openrn')
-    expect(mockIDB.mockStore.index).toHaveBeenCalledWith('source')
-  })
-
-  it('search filters entries by query matching title, content, or key', async () => {
-    mockIDB.entries.set('openrn:ch1', {
-      key: 'openrn:ch1', source: 'openrn', title: 'Pharmacology Basics',
-      chapter: 1, content: 'Drug interactions', data: { x: 1 }, updatedAt: '',
-    })
-    mockIDB.entries.set('openrn:ch2', {
-      key: 'openrn:ch2', source: 'openrn', title: 'Anatomy',
-      chapter: 2, content: 'Body systems', data: { y: 2 }, updatedAt: '',
-    })
-
-    const store = await getStore()
-    const results = await store.search('pharmacology')
-    // Search filters via getAll then filter
-    expect(mockIDB.mockStore.getAll).toHaveBeenCalled()
-  })
-
-  it('bulkPut stores multiple entries in a transaction', async () => {
-    // For bulkPut, we need to handle transaction.oncomplete
-    const originalTransaction = mockIDB.mockDB.transaction
-    vi.mocked(mockIDB.mockDB.transaction as any).mockImplementation(() => {
-      const tx = {
-        objectStore: vi.fn(() => mockIDB.mockStore),
-        oncomplete: null as (() => void) | null,
-        onerror: null as (() => void) | null,
+function makeFakeDB() {
+  return {
+    transaction: vi.fn(() => {
+      const tx: any = {
+        objectStore: vi.fn(() => fakeStore),
+        oncomplete: null,
+        onerror: null,
         error: null,
       }
-      Promise.resolve().then(() => {
-        if (typeof tx.oncomplete === 'function') tx.oncomplete()
-      })
+      queueMicrotask(() => { if (tx.oncomplete) tx.oncomplete() })
       return tx
-    })
+    }),
+    objectStoreNames: fakeObjectStoreNames,
+    createObjectStore: vi.fn(() => fakeStore),
+  }
+}
 
-    const store = await getStore()
-    await store.bulkPut([
-      { key: 'openrn:ch1', data: { title: 'Ch1', chapter: 1, content: 'text' } },
-      { key: 'openrn:ch2', data: { title: 'Ch2', chapter: 2, content: 'text2' } },
-    ])
-    expect(mockIDB.mockStore.put).toHaveBeenCalledTimes(2)
+let fakeDB: ReturnType<typeof makeFakeDB>
+
+vi.stubGlobal('indexedDB', {
+  open: vi.fn(() => {
+    const req: any = { result: fakeDB, error: null, onupgradeneeded: null, onsuccess: null, onerror: null }
+    queueMicrotask(() => {
+      if (req.onupgradeneeded) req.onupgradeneeded()
+      if (req.onsuccess) req.onsuccess()
+    })
+    return req
+  }),
+})
+
+import { indexedDBStore } from '../../services/indexeddb-store'
+
+describe('indexedDBStore', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeData = new Map()
+    fakeStore = createFakeStore()
+    fakeDB = makeFakeDB()
+    fakeObjectStoreNames.contains.mockReturnValue(false)
   })
 
-  it('get returns null on error', async () => {
-    // Make openDB reject
-    vi.mocked(mockIDB.mockIndexedDB.open).mockImplementation(() => {
-      const req: Record<string, unknown> = {
-        result: null,
-        onsuccess: null,
-        onerror: null,
-        onupgradeneeded: null,
-        error: new Error('IDB error'),
-      }
-      Promise.resolve().then(() => {
-        if (typeof req.onerror === 'function') req.onerror()
-      })
-      return req as any
+  describe('get', () => {
+    it('returns data for existing key', async () => {
+      storeData.set('openrn:ch1', { key: 'openrn:ch1', data: { title: 'Chapter 1' } })
+      const result = await indexedDBStore.get('openrn:ch1')
+      expect(result).toEqual({ title: 'Chapter 1' })
     })
 
-    const store = await getStore()
-    const result = await store.get('anything')
-    expect(result).toBeNull()
+    it('returns null for missing key', async () => {
+      const result = await indexedDBStore.get('nonexistent')
+      expect(result).toBeNull()
+    })
+
+    it('returns null on error', async () => {
+      const origOpen = (globalThis as any).indexedDB.open
+      ;(globalThis as any).indexedDB.open = vi.fn(() => {
+        const req: any = { result: null, error: new Error('DB error'), onsuccess: null, onerror: null }
+        queueMicrotask(() => { if (req.onerror) req.onerror() })
+        return req
+      })
+
+      const result = await indexedDBStore.get('test')
+      expect(result).toBeNull()
+      ;(globalThis as any).indexedDB.open = origOpen
+    })
+  })
+
+  describe('put', () => {
+    it('stores data with correct entry structure', async () => {
+      await indexedDBStore.put('openrn:ch1', {
+        title: 'Chapter 1',
+        chapter: 3,
+        section: 'A',
+        content: 'Some text',
+      })
+      expect(fakeStore.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: 'openrn:ch1',
+          source: 'openrn',
+          title: 'Chapter 1',
+          chapter: 3,
+          section: 'A',
+          content: 'Some text',
+        })
+      )
+    })
+
+    it('uses defaults when data fields are missing', async () => {
+      await indexedDBStore.put('openrn:ch2', {})
+      expect(fakeStore.put).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'openrn:ch2',
+          chapter: 0,
+          content: '',
+        })
+      )
+    })
+  })
+
+  describe('delete', () => {
+    it('calls store.delete with key', async () => {
+      await indexedDBStore.delete('test-key')
+      expect(fakeStore.delete).toHaveBeenCalledWith('test-key')
+    })
+  })
+
+  describe('getAllKeys', () => {
+    it('returns all stored keys', async () => {
+      storeData.set('key1', { key: 'key1' })
+      storeData.set('key2', { key: 'key2' })
+      const keys = await indexedDBStore.getAllKeys()
+      expect(keys).toEqual(['key1', 'key2'])
+    })
+  })
+
+  describe('getBySource', () => {
+    it('queries the source index', async () => {
+      storeData.set('openrn:ch1', { key: 'openrn:ch1', source: 'openrn' })
+      const result = await indexedDBStore.getBySource('openrn')
+      expect(fakeStore.index).toHaveBeenCalledWith('source')
+      expect(result).toEqual([expect.objectContaining({ source: 'openrn' })])
+    })
+  })
+
+  describe('search', () => {
+    it('matches on title', async () => {
+      storeData.set('ch1', {
+        key: 'ch1', title: 'Cardiovascular', content: '', data: { t: 1 },
+      })
+      storeData.set('ch2', {
+        key: 'ch2', title: 'Neurological', content: '', data: { t: 2 },
+      })
+      const results = await indexedDBStore.search('cardio')
+      expect(results).toHaveLength(1)
+      expect(results[0].key).toBe('ch1')
+    })
+
+    it('matches on content', async () => {
+      storeData.set('ch1', {
+        key: 'ch1', title: 'Title', content: 'pharmacology basics', data: {},
+      })
+      const results = await indexedDBStore.search('pharmacology')
+      expect(results).toHaveLength(1)
+    })
+
+    it('matches on key', async () => {
+      storeData.set('openrn:pharm', {
+        key: 'openrn:pharm', title: 'T', content: 'C', data: {},
+      })
+      const results = await indexedDBStore.search('openrn:pharm')
+      expect(results).toHaveLength(1)
+    })
+
+    it('returns empty array when no matches', async () => {
+      storeData.set('ch1', { key: 'ch1', title: 'T', content: 'C', data: {} })
+      const results = await indexedDBStore.search('zzzznotfound')
+      expect(results).toEqual([])
+    })
+  })
+
+  describe('count', () => {
+    it('returns the number of entries', async () => {
+      storeData.set('a', {})
+      storeData.set('b', {})
+      const count = await indexedDBStore.count()
+      expect(count).toBe(2)
+    })
+  })
+
+  describe('clear', () => {
+    it('clears all entries', async () => {
+      storeData.set('a', {})
+      await indexedDBStore.clear()
+      expect(fakeStore.clear).toHaveBeenCalled()
+    })
+  })
+
+  describe('bulkPut', () => {
+    it('stores multiple entries via transaction', async () => {
+      const entries = [
+        { key: 'openrn:ch1', data: { title: 'Ch 1', chapter: 1, content: 'text1' } },
+        { key: 'openrn:ch2', data: { title: 'Ch 2', chapter: 2, content: 'text2' } },
+      ]
+      await indexedDBStore.bulkPut(entries)
+      expect(fakeStore.put).toHaveBeenCalledTimes(2)
+    })
   })
 })
