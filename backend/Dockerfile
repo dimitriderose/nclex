@@ -5,7 +5,6 @@ WORKDIR /app
 
 # Copy only build files first for better caching
 COPY build.gradle.kts settings.gradle.kts ./
-COPY gradle ./gradle
 RUN gradle dependencies --no-daemon || true
 
 # Copy source and build
@@ -13,12 +12,12 @@ COPY src ./src
 RUN gradle bootJar --no-daemon -x test
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
 # Create non-root user
-RUN addgroup -S nclex && adduser -S nclex -G nclex
+RUN groupadd -r nclex && useradd -r -g nclex nclex
 
 # Copy the built jar
 COPY --from=builder /app/build/libs/*.jar app.jar

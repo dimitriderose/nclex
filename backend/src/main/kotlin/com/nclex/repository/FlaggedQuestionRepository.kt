@@ -13,6 +13,10 @@ interface FlaggedQuestionRepository : JpaRepository<FlaggedQuestion, UUID> {
     fun findByUserIdAndTopic(userId: UUID, topic: String): List<FlaggedQuestion>
 
     @Modifying
+    @Query("DELETE FROM FlaggedQuestion fq WHERE fq.id = :id AND fq.userId = :userId")
+    fun deleteByIdAndUserId(id: UUID, userId: UUID): Long
+
+    @Modifying
     @Query("DELETE FROM FlaggedQuestion fq WHERE fq.userId = :userId")
     fun deleteByUserId(userId: UUID)
 }

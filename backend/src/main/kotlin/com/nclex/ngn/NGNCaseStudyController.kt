@@ -16,7 +16,8 @@ class NGNCaseStudyController(
         @Valid @RequestBody body: GenerateCaseRequest,
         request: HttpServletRequest
     ): ResponseEntity<CaseStudyResponse> {
-        val userId = request.getAttribute("userId") as String
+        val userId = request.getAttribute("userId")?.toString()
+            ?: throw IllegalStateException("Missing userId")
         val caseStudy = ngnCaseStudyService.generateCaseStudy(
             topic = body.topic,
             questionTypes = body.questionTypes ?: listOf("bow_tie", "matrix_multiple_choice"),

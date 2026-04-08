@@ -23,7 +23,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableMethodSecurity(prePostEnabled = true)
 class SecurityConfig(
     private val jwtCookieFilter: JwtCookieFilter,
-    @Value("\${cors.allowed-origins:http://localhost:5173}") private val allowedOrigins: String
+    @Value("\${nclex.cors.allowed-origins:http://localhost:3000,http://localhost:5173}") private val allowedOrigins: String
 ) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {

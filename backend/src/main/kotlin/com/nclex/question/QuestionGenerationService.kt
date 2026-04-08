@@ -18,9 +18,9 @@ class QuestionGenerationService(
     private val contentCacheRepository: ContentCacheRepository,
     private val rateLimitService: RateLimitService,
     private val auditLogger: AuditLogger,
-    @Value("\${claude.api.key:}") private val apiKey: String,
-    @Value("\${claude.api.url:https://api.anthropic.com/v1/messages}") private val apiUrl: String,
-    @Value("\${claude.api.model:claude-sonnet-4-20250514}") private val model: String
+    @Value("\${nclex.claude.api-key:}") private val apiKey: String,
+    @Value("\${nclex.claude.api-url:https://api.anthropic.com/v1/messages}") private val apiUrl: String,
+    @Value("\${nclex.claude.model-sonnet}") private val model: String
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 

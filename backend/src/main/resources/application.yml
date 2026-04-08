@@ -29,11 +29,13 @@ nclex:
     secret: ${JWT_SECRET:change-me-in-production-this-must-be-at-least-256-bits-long-for-hs256}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}  # 24 hours
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173}
   claude:
     api-key: ${CLAUDE_API_KEY:}
     api-url: ${CLAUDE_API_URL:https://api.anthropic.com/v1/messages}
     model: ${CLAUDE_MODEL:claude-sonnet-4-20250514}
+    model-sonnet: ${CLAUDE_MODEL_SONNET:claude-sonnet-4-20250514}
+    model-haiku: ${CLAUDE_MODEL_HAIKU:claude-haiku-4-5-20251001}
     max-tokens: ${CLAUDE_MAX_TOKENS:4096}
   rate-limit:
     login:

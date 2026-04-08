@@ -31,6 +31,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: nclex_dev_password
       JWT_SECRET: dev-jwt-secret-change-in-production-at-least-32-chars
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-sk-ant-placeholder}
+      CLAUDE_MODEL_SONNET: ${CLAUDE_MODEL_SONNET:-claude-sonnet-4-20250514}
+      CLAUDE_MODEL_HAIKU: ${CLAUDE_MODEL_HAIKU:-claude-haiku-4-5-20251001}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       SPRING_PROFILES_ACTIVE: dev
     depends_on:
       postgres:
@@ -49,6 +52,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:80"
+    volumes:
+      - ./docs/books/epubs:/usr/share/nginx/html/books/epubs:ro
+      - ./docs/books/pdfs:/usr/share/nginx/html/books/pdfs:ro
     depends_on:
       backend:
         condition: service_healthy

@@ -18,9 +18,9 @@ class VoiceAssistantController(
     private val webClient: WebClient.Builder,
     private val contentCacheRepository: ContentCacheRepository,
     private val rateLimitService: RateLimitService,
-    @Value("\${claude.api.key:}") private val apiKey: String,
-    @Value("\${claude.api.url:https://api.anthropic.com/v1/messages}") private val apiUrl: String,
-    @Value("\${claude.api.model:claude-sonnet-4-20250514}") private val model: String
+    @Value("\${nclex.claude.api-key:}") private val apiKey: String,
+    @Value("\${nclex.claude.api-url:https://api.anthropic.com/v1/messages}") private val apiUrl: String,
+    @Value("\${nclex.claude.model-sonnet}") private val model: String
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -43,7 +43,8 @@ class VoiceAssistantController(
         @RequestBody body: VoiceRequest,
         request: HttpServletRequest
     ): ResponseEntity<VoiceResponse> {
-        val userId = request.getAttribute("userId") as String
+        val userId = request.getAttribute("userId")?.toString()
+            ?: throw IllegalStateException("Missing userId")
 
         if (!rateLimitService.tryConsumeClaude(userId)) {
             throw RateLimitException("Rate limit exceeded")

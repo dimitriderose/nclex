@@ -16,7 +16,8 @@ class QuestionGenerationController(
         @Valid @RequestBody body: GenerateRequest,
         request: HttpServletRequest
     ): ResponseEntity<GeneratedQuestionResponse> {
-        val userId = request.getAttribute("userId") as String
+        val userId = request.getAttribute("userId")?.toString()
+            ?: throw IllegalStateException("Missing userId")
         val question = questionGenerationService.generateQuestion(
             topic = body.topic,
             questionType = body.questionType,
@@ -33,7 +34,8 @@ class QuestionGenerationController(
         @Valid @RequestBody body: BatchGenerateRequest,
         request: HttpServletRequest
     ): ResponseEntity<List<GeneratedQuestionResponse>> {
-        val userId = request.getAttribute("userId") as String
+        val userId = request.getAttribute("userId")?.toString()
+            ?: throw IllegalStateException("Missing userId")
         val questions = questionGenerationService.generateBatch(
             topics = body.topics,
             count = body.count,
