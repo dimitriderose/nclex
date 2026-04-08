@@ -1,0 +1,437 @@
+/* ==========================================================================
+   ReaderHighlights.css — Highlight popup, marks, and sidebars
+   All scoped under .nclex-reader
+   ========================================================================== */
+
+/* ==========================================================================
+   Highlight Popup (appears on text selection)
+   ========================================================================== */
+
+.nclex-reader .highlight-popup {
+  position: absolute;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.nclex-reader .highlight-color-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  padding: 0;
+  outline: none;
+}
+
+.nclex-reader .highlight-color-btn:hover {
+  transform: scale(1.2);
+  border-color: var(--text-muted);
+}
+
+.nclex-reader .highlight-color-btn:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ==========================================================================
+   Highlight Marks in Content
+   ========================================================================== */
+
+.nclex-reader mark.user-highlight {
+  border-radius: 2px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.nclex-reader mark[data-highlight-color="yellow"] {
+  background: rgba(255, 235, 59, 0.3);
+}
+
+.nclex-reader mark[data-highlight-color="green"] {
+  background: rgba(102, 187, 106, 0.3);
+}
+
+.nclex-reader mark[data-highlight-color="blue"] {
+  background: rgba(66, 165, 245, 0.3);
+}
+
+.nclex-reader mark[data-highlight-color="pink"] {
+  background: rgba(236, 64, 122, 0.3);
+}
+
+/* Dark / night themes: slightly stronger */
+.nclex-reader[data-reader-theme="dark"] mark[data-highlight-color="yellow"],
+.nclex-reader[data-reader-theme="night"] mark[data-highlight-color="yellow"] {
+  background: rgba(255, 235, 59, 0.2);
+}
+
+.nclex-reader[data-reader-theme="dark"] mark[data-highlight-color="green"],
+.nclex-reader[data-reader-theme="night"] mark[data-highlight-color="green"] {
+  background: rgba(102, 187, 106, 0.2);
+}
+
+.nclex-reader[data-reader-theme="dark"] mark[data-highlight-color="blue"],
+.nclex-reader[data-reader-theme="night"] mark[data-highlight-color="blue"] {
+  background: rgba(66, 165, 245, 0.2);
+}
+
+.nclex-reader[data-reader-theme="dark"] mark[data-highlight-color="pink"],
+.nclex-reader[data-reader-theme="night"] mark[data-highlight-color="pink"] {
+  background: rgba(236, 64, 122, 0.2);
+}
+
+/* ==========================================================================
+   Shared Sidebar Styles
+   ========================================================================== */
+
+.nclex-reader .highlights-sidebar,
+.nclex-reader .bookmarks-sidebar {
+  position: fixed;
+  top: 0;
+  height: 100%;
+  width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+/* Highlights from right */
+.nclex-reader .highlights-sidebar {
+  right: 0;
+  transform: translateX(100%);
+  border-left: 1px solid var(--border);
+}
+
+.nclex-reader .highlights-sidebar.open {
+  transform: translateX(0);
+}
+
+/* Bookmarks from left */
+.nclex-reader .bookmarks-sidebar {
+  left: 0;
+  transform: translateX(-100%);
+  border-right: 1px solid var(--border);
+}
+
+.nclex-reader .bookmarks-sidebar.open {
+  transform: translateX(0);
+}
+
+/* Sidebar header */
+.nclex-reader .sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.nclex-reader .sidebar-header h3 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.nclex-reader .sidebar-close-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.nclex-reader .sidebar-close-btn:hover {
+  color: var(--text);
+}
+
+/* Search (bookmarks) */
+.nclex-reader .sidebar-search {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.nclex-reader .sidebar-search-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.nclex-reader .sidebar-search-input:focus {
+  border-color: var(--accent);
+}
+
+/* Sidebar scrollable content */
+.nclex-reader .sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+/* Empty state */
+.nclex-reader .sidebar-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.nclex-reader .sidebar-empty-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* Sidebar list */
+.nclex-reader .sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nclex-reader .sidebar-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.nclex-reader .sidebar-item:hover {
+  background: var(--surface-2);
+}
+
+.nclex-reader .sidebar-item-text {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.nclex-reader .sidebar-item-note {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.nclex-reader .sidebar-item-add-note {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nclex-reader .sidebar-item:hover .sidebar-item-add-note {
+  opacity: 1;
+}
+
+/* Note editing */
+.nclex-reader .sidebar-item-note-edit {
+  margin-top: 6px;
+}
+
+.nclex-reader .sidebar-note-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.nclex-reader .sidebar-note-input:focus {
+  border-color: var(--accent);
+}
+
+.nclex-reader .sidebar-note-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.nclex-reader .sidebar-note-save,
+.nclex-reader .sidebar-note-cancel {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.nclex-reader .sidebar-note-save:hover {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: var(--accent);
+}
+
+.nclex-reader .sidebar-note-cancel:hover {
+  background: var(--surface-2);
+}
+
+/* Item actions */
+.nclex-reader .sidebar-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nclex-reader .sidebar-item:hover .sidebar-item-actions {
+  opacity: 1;
+}
+
+.nclex-reader .sidebar-item-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--error, #DC3545);
+  cursor: pointer;
+}
+
+.nclex-reader .sidebar-item-delete:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Bookmark-specific styles
+   ========================================================================== */
+
+.nclex-reader .bookmark-item .sidebar-item-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.nclex-reader .bookmark-page {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.nclex-reader .bookmark-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nclex-reader .bookmark-item .sidebar-item-delete {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nclex-reader .bookmark-item:hover .sidebar-item-delete {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   BottomBar bookmark/highlight buttons
+   ========================================================================== */
+
+.nclex-reader .bb-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.nclex-reader .bb-icon-btn:hover {
+  color: var(--text);
+}
+
+.nclex-reader .bb-bookmark-btn.active {
+  color: var(--save-color);
+}
+
+.nclex-reader .bb-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: var(--accent);
+  color: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .nclex-reader .highlights-sidebar,
+  .nclex-reader .bookmarks-sidebar {
+    width: 100%;
+  }
+}

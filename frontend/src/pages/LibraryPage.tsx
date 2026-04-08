@@ -63,6 +63,7 @@ export function LibraryPage() {
       <ContentReader
         epubUrl={`/books/epubs/${activeBook.epubFile}`}
         bookTitle={activeBook.title}
+        contentKey={`openrn:${activeBook.key}`}
         onClose={() => setActiveBook(null)}
       />
     )

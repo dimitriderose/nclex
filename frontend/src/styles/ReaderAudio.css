@@ -1,0 +1,156 @@
+/* ==========================================================================
+   ReaderAudio.css – Audio bar styles for the EPUB reader TTS feature.
+   All scoped under .nclex-reader.
+   ========================================================================== */
+
+/* --- Audio bar container --- */
+
+.nclex-reader .audio-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  z-index: 30;
+  font-family: var(--font-ui);
+  transform: translateY(0);
+  transition: transform 0.3s ease;
+}
+
+.nclex-reader .audio-bar.hidden {
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+/* --- Audio buttons --- */
+
+.nclex-reader .audio-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nclex-reader .audio-btn:hover {
+  background: var(--surface-2);
+}
+
+.nclex-reader .audio-btn:active {
+  background: var(--border);
+}
+
+.nclex-reader .audio-btn.playing {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+.nclex-reader .audio-btn.playing:hover {
+  background: var(--accent-hover);
+}
+
+/* --- Speed button --- */
+
+.nclex-reader .audio-speed-btn {
+  width: auto;
+  min-width: 42px;
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* --- Voice select --- */
+
+.nclex-reader .audio-voice-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  max-width: 180px;
+  cursor: pointer;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.nclex-reader .audio-voice-select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --- Divider --- */
+
+.nclex-reader .audio-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* --- Sentence info --- */
+
+.nclex-reader .audio-sentence-info {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* --- Audio highlight (sentence being read) --- */
+
+.nclex-reader .audio-highlight {
+  background: rgba(212, 168, 67, 0.25);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.nclex-reader[data-reader-theme="dark"] .audio-highlight,
+.nclex-reader[data-reader-theme="night"] .audio-highlight {
+  background: rgba(212, 168, 67, 0.2);
+}
+
+/* ==========================================================================
+   Responsive: mobile compact layout
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .nclex-reader .audio-bar {
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .nclex-reader .audio-voice-select {
+    display: none;
+  }
+
+  .nclex-reader .audio-speed-btn {
+    min-width: 36px;
+    padding: 0 6px;
+    font-size: 0.75rem;
+  }
+
+  .nclex-reader .audio-sentence-info {
+    font-size: 0.75rem;
+  }
+}
