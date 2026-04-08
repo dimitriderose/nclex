@@ -19,6 +19,10 @@ vi.mock('../../services/indexeddb-store', () => ({
   },
 }))
 
+vi.mock('../../services/index-bundled-content', () => ({
+  indexBundledContent: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('../../data/static-modules', () => ({
   staticData: {
     drugs: { metformin: { class: 'Biguanide' } },
@@ -114,7 +118,7 @@ describe('contentSetup', () => {
       )
     })
 
-    it('calls onProgress callback', async () => {
+    it('calls onProgress callback when chapters already cached', async () => {
       vi.mocked(indexedDBStore.count).mockResolvedValue(3)
       vi.mocked(localStorageManager.getMeta).mockReturnValue({
         version: 1,
@@ -126,20 +130,20 @@ describe('contentSetup', () => {
       const onProgress = vi.fn()
       await contentSetup.runPhase2(onProgress)
       expect(onProgress).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'phase2', message: 'Preparing textbook storage...' })
-      )
-      expect(onProgress).toHaveBeenCalledWith(
         expect.objectContaining({
           phase: 'phase2',
-          message: 'Textbook storage ready (3 chapters cached)',
+          message: 'Textbooks ready (3 chapters)',
         })
       )
     })
 
     it('does not update meta when getMeta returns null', async () => {
+      // First count call returns 0 (not cached), second returns 0 (after indexing)
       vi.mocked(indexedDBStore.count).mockResolvedValue(0)
       vi.mocked(localStorageManager.getMeta).mockReturnValue(null)
       await contentSetup.runPhase2()
+      // setMeta is not called because getMeta returns null
+      // (the setMeta from runPhase1 is separate)
       expect(localStorageManager.setMeta).not.toHaveBeenCalled()
     })
   })

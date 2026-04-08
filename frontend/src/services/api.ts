@@ -6,6 +6,10 @@ import type {
   ClaudeMessage,
   ContentCache,
   ReadingPosition,
+  BookmarkDTO,
+  BookmarkSyncItem,
+  HighlightDTO,
+  HighlightSyncItem,
 } from '../types'
 
 const BASE_URL = '/api'
@@ -207,6 +211,48 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ contentKey, position }),
     })
+    return res.json()
+  },
+
+  // Annotations - Bookmarks
+  async getBookmarks(contentKey?: string): Promise<BookmarkDTO[]> {
+    const url = contentKey
+      ? `/annotations/bookmarks?contentKey=${encodeURIComponent(contentKey)}`
+      : '/annotations/bookmarks'
+    const res = await authedFetch(url)
+    return res.json()
+  },
+
+  async syncBookmarks(items: BookmarkSyncItem[]): Promise<{ bookmarks: BookmarkDTO[]; serverTime: string }> {
+    const res = await authedFetch('/annotations/bookmarks/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+    return res.json()
+  },
+
+  // Annotations - Highlights
+  async getHighlights(contentKey?: string): Promise<HighlightDTO[]> {
+    const url = contentKey
+      ? `/annotations/highlights?contentKey=${encodeURIComponent(contentKey)}`
+      : '/annotations/highlights'
+    const res = await authedFetch(url)
+    return res.json()
+  },
+
+  async syncHighlights(items: HighlightSyncItem[]): Promise<{ highlights: HighlightDTO[]; serverTime: string }> {
+    const res = await authedFetch('/annotations/highlights/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+    return res.json()
+  },
+
+  // Delta sync
+  async getAnnotationChanges(since: string): Promise<{ bookmarks: BookmarkDTO[]; highlights: HighlightDTO[]; serverTime: string }> {
+    const res = await authedFetch(`/annotations/changes?since=${encodeURIComponent(since)}`)
     return res.json()
   },
 }

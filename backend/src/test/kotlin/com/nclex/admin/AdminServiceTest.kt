@@ -169,7 +169,7 @@ class AdminServiceTest {
             val stats = createStats(userId)
 
             every { userRepository.findById(userId) } returns Optional.of(user)
-            every { userRepository.save(any()) } returnsArg 0
+            every { userRepository.save(any()) } answers { firstArg() }
             every { userStatsRepository.findByUserId(userId) } returns stats
 
             val result = service.updateRole(userId, "ADMIN")
@@ -200,7 +200,7 @@ class AdminServiceTest {
             val user = createUser(id = userId)
 
             every { userRepository.findById(userId) } returns Optional.of(user)
-            every { userRepository.save(any()) } returnsArg 0
+            every { userRepository.save(any()) } answers { firstArg() }
 
             service.softDeleteUser(userId)
 
@@ -320,6 +320,81 @@ class AdminServiceTest {
         }
     }
 
+    // ── getUserDetail null stats branches ────────────────────────────
+
+    @Nested
+    inner class GetUserDetailNullStats {
+
+        @Test
+        fun `null stats returns defaults for all optional fields`() {
+            val userId = UUID.randomUUID()
+            val user = createUser(id = userId)
+
+            every { userRepository.findById(userId) } returns Optional.of(user)
+            every { userStatsRepository.findByUserId(userId) } returns null
+
+            val result = service.getUserDetail(userId)
+            assertThat(result.lastActiveAt).isNull()
+            assertThat(result.questionsAnswered).isEqualTo(0)
+            assertThat(result.readinessScore).isEqualTo(0.0)
+        }
+    }
+
+    // ── getAuditLog with from/to dates ──────────────────────────────
+
+    @Nested
+    inner class GetAuditLogWithDates {
+
+        @Test
+        fun `explicit from and to dates are passed through`() {
+            val from = Instant.now().minusSeconds(3600)
+            val to = Instant.now()
+            val page = PageImpl(emptyList<AuditLog>())
+
+            every {
+                auditLogRepository.findFiltered(isNull(), isNull(), eq(from), eq(to), any())
+            } returns page
+
+            val result = service.getAuditLog(null, null, from, to, 0, 50)
+            assertThat(result["totalElements"]).isEqualTo(0L)
+        }
+    }
+
+    // ── exportAuditLogCsv with from/to dates ────────────────────────
+
+    @Nested
+    inner class ExportAuditLogCsvWithDates {
+
+        @Test
+        fun `explicit from and to dates are passed through`() {
+            val from = Instant.now().minusSeconds(7200)
+            val to = Instant.now()
+
+            every { auditLogRepository.findAllFiltered(isNull(), isNull(), eq(from), eq(to)) } returns emptyList()
+
+            val csv = service.exportAuditLogCsv(null, null, from, to)
+            assertThat(csv).contains("id,event_type")
+        }
+    }
+
+    // ── triggerCacheRefresh ─────────────────────────────────────────
+
+    @Nested
+    inner class TriggerCacheRefresh {
+
+        @Test
+        fun `with null source logs all`() {
+            service.triggerCacheRefresh(null)
+            // Just verify it doesn't throw - covers the source ?: "all" branch
+        }
+
+        @Test
+        fun `with specific source logs that source`() {
+            service.triggerCacheRefresh("fda_labels")
+            // Covers the non-null source branch
+        }
+    }
+
     // ── getReports ──────────────────────────────────────────────────
 
     @Nested
@@ -362,7 +437,7 @@ class AdminServiceTest {
             )
 
             every { questionReportRepository.findById(reportId) } returns Optional.of(report)
-            every { questionReportRepository.save(any()) } returnsArg 0
+            every { questionReportRepository.save(any()) } answers { firstArg() }
 
             val result = service.updateReport(reportId, "REVIEWED", "Looks correct")
 

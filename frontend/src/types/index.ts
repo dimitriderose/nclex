@@ -78,6 +78,55 @@ export interface ReadingPosition {
   updatedAt: string
 }
 
+// Annotation DTOs
+export interface BookmarkDTO {
+  id: string
+  clientId: string
+  contentKey: string
+  page: number
+  label: string | null
+  deletedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HighlightDTO {
+  id: string
+  clientId: string
+  contentKey: string
+  color: string
+  text: string
+  note: string | null
+  startXpath: string
+  startOffset: number
+  endXpath: string
+  endOffset: number
+  deletedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BookmarkSyncItem {
+  clientId: string
+  contentKey: string
+  page: number
+  label: string
+  action: 'upsert' | 'delete'
+}
+
+export interface HighlightSyncItem {
+  clientId: string
+  contentKey: string
+  color: string
+  text: string
+  note: string
+  startXpath: string
+  startOffset: number
+  endXpath: string
+  endOffset: number
+  action: 'upsert' | 'delete'
+}
+
 // API error
 export interface ApiError {
   error: string

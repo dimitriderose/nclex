@@ -1,0 +1,95 @@
+/* ==========================================================================
+   ReaderTheme.css – NCLEX EPUB Reader Theme System
+   Ported from reader-app. All variables scoped under .nclex-reader
+   to avoid polluting NCLEX global styles.
+   ========================================================================== */
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,500;8..60,600&family=Inter:wght@400;500;600;700&display=swap');
+
+/* ==========================================================================
+   Light Theme (default)
+   ========================================================================== */
+
+.nclex-reader {
+  --bg: #f8fafc;
+  --bg-outer: #f1f5f9;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --page-shadow: rgba(0, 0, 0, 0.08);
+  --page-fold: rgba(0, 0, 0, 0.12);
+  --error: #DC3545;
+  --error-bg: #FEF2F2;
+  --save-color: #D4A843;
+  --radius: 12px;
+  --font-reading: 'Source Serif 4', Georgia, serif;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --toolbar-h: 46px;
+  --bottombar-h: 56px;
+}
+
+/* ==========================================================================
+   Sepia Theme
+   ========================================================================== */
+
+.nclex-reader[data-reader-theme="sepia"] {
+  --bg: #F2E8D5;
+  --bg-outer: #E5D9C3;
+  --surface: #FAF4E6;
+  --surface-2: #EDE3CF;
+  --text: #3D3226;
+  --text-muted: #8A7E6C;
+  --border: #DDD0B8;
+  --accent: #5C4A32;
+  --accent-hover: #3D3226;
+  --page-shadow: rgba(60, 40, 10, 0.1);
+  --page-fold: rgba(60, 40, 10, 0.15);
+  --save-color: #B8860B;
+}
+
+/* ==========================================================================
+   Dark Theme
+   ========================================================================== */
+
+.nclex-reader[data-reader-theme="dark"] {
+  --bg: #1A1A1A;
+  --bg-outer: #111111;
+  --surface: #222222;
+  --surface-2: #2A2A2A;
+  --text: #E0DDD5;
+  --text-muted: #8A8A82;
+  --border: #333330;
+  --accent: #D5D0C4;
+  --accent-hover: #FFFFFF;
+  --page-shadow: rgba(0, 0, 0, 0.5);
+  --page-fold: rgba(0, 0, 0, 0.6);
+  --error: #FF6B6B;
+  --error-bg: #2D1515;
+  --save-color: #E8BD5A;
+}
+
+/* ==========================================================================
+   Night Theme
+   ========================================================================== */
+
+.nclex-reader[data-reader-theme="night"] {
+  --bg: #1C1810;
+  --bg-outer: #120F08;
+  --surface: #252015;
+  --surface-2: #2D2618;
+  --text: #D8CFC0;
+  --text-muted: #8A7E6A;
+  --border: #3A3225;
+  --accent: #C4A060;
+  --accent-hover: #D4B070;
+  --page-shadow: rgba(0, 0, 0, 0.5);
+  --page-fold: rgba(0, 0, 0, 0.6);
+  --error: #FF8A6B;
+  --error-bg: #2D1B15;
+  --save-color: #D4A843;
+}

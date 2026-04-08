@@ -23,6 +23,8 @@ class AuditLogger(
         ipAddress: String? = null,
         metadata: Map<String, Any> = emptyMap()
     ): AuditLog {
+        logger.info("event={} userId={} metadata={}", eventType, userId, metadata)
+
         val auditLog = AuditLog(
             eventType = eventType,
             userId = userId,

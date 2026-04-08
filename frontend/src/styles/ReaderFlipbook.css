@@ -1,0 +1,665 @@
+/* ==========================================================================
+   ReaderFlipbook.css – NCLEX EPUB Reader Flipbook, Toolbar & Bottom Bar
+   Ported from reader-app. All selectors scoped under .nclex-reader.
+   ========================================================================== */
+
+/* ==========================================================================
+   Toolbar
+   ========================================================================== */
+
+.nclex-reader .reader-toolbar {
+  height: var(--toolbar-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-size: 0.8rem;
+  font-family: var(--font-ui);
+  padding: 0 16px;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nclex-reader .tb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.nclex-reader .tb-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  padding: 0;
+  font-size: inherit;
+  line-height: 1;
+}
+
+.nclex-reader .tb-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.nclex-reader .tb-val {
+  min-width: 28px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.nclex-reader .tb-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.nclex-reader .tb-toggle {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  padding: 5px 12px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.nclex-reader .tb-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.nclex-reader .tb-toggle.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+.nclex-reader .tb-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* Theme Dots */
+
+.nclex-reader .theme-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nclex-reader .theme-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.nclex-reader .theme-dot:hover {
+  border-color: var(--accent);
+}
+
+.nclex-reader .theme-dot.active {
+  border-color: var(--accent);
+  transform: scale(1.15);
+}
+
+.nclex-reader .theme-dot[data-theme="light"] {
+  background-color: #FAFAF7;
+}
+
+.nclex-reader .theme-dot[data-theme="sepia"] {
+  background-color: #F2E8D5;
+}
+
+.nclex-reader .theme-dot[data-theme="dark"] {
+  background-color: #1A1A1A;
+}
+
+.nclex-reader .theme-dot[data-theme="night"] {
+  background-color: #1C1810;
+}
+
+/* ==========================================================================
+   Flipbook
+   ========================================================================== */
+
+.nclex-reader .flipbook {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-outer);
+}
+
+.nclex-reader .flipbook-page {
+  max-width: 860px;
+  height: 100%;
+  margin: 0 auto;
+  background: var(--bg);
+  box-shadow:
+    -1px 0 0 var(--border),
+    1px 0 0 var(--border),
+    0 4px 16px var(--page-shadow);
+  position: relative;
+}
+
+.nclex-reader .flipbook-viewport {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.nclex-reader .flipbook-content {
+  padding: 48px 56px;
+  column-fill: auto;
+  column-gap: 120px;
+  font-family: var(--font-reading);
+  font-size: var(--reader-fs, 20px);
+  line-height: 1.72;
+  color: var(--text);
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+/* ==========================================================================
+   Content Typography
+   ========================================================================== */
+
+.nclex-reader .flipbook-content h1 {
+  font-size: 1.8em;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.6em;
+  margin-top: 0;
+  break-after: avoid;
+  break-inside: avoid;
+  color: var(--text);
+}
+
+.nclex-reader .flipbook-content h2 {
+  font-size: 1.4em;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  break-after: avoid;
+  break-inside: avoid;
+  color: var(--text);
+}
+
+.nclex-reader .flipbook-content h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  break-after: avoid;
+  break-inside: avoid;
+  color: var(--text);
+}
+
+.nclex-reader .flipbook-content h4 {
+  font-size: 1.05em;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 0.8em;
+  margin-bottom: 0.3em;
+  color: var(--text);
+}
+
+.nclex-reader .flipbook-content p {
+  margin-top: 0;
+  margin-bottom: 1.1em;
+  orphans: 3;
+  widows: 3;
+}
+
+.nclex-reader .flipbook-content blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 20px;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.nclex-reader .flipbook-content ul,
+.nclex-reader .flipbook-content ol {
+  padding-left: 1.5em;
+  margin-bottom: 1.1em;
+}
+
+.nclex-reader .flipbook-content li {
+  margin-bottom: 0.3em;
+}
+
+.nclex-reader .flipbook-content img {
+  max-width: 100%;
+  height: auto;
+  break-inside: avoid;
+  border-radius: 4px;
+}
+
+.nclex-reader .flipbook-content a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nclex-reader .flipbook-content a:hover {
+  color: var(--accent-hover);
+}
+
+.nclex-reader .flipbook-content pre {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.5;
+  margin-bottom: 1.1em;
+  break-inside: avoid;
+}
+
+.nclex-reader .flipbook-content code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.9em;
+}
+
+.nclex-reader .flipbook-content pre code {
+  font-size: inherit;
+}
+
+.nclex-reader .flipbook-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 1.1em;
+  break-inside: avoid;
+}
+
+.nclex-reader .flipbook-content th,
+.nclex-reader .flipbook-content td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.nclex-reader .flipbook-content th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.nclex-reader .flipbook-content tr:nth-child(even) {
+  background: var(--surface-2);
+}
+
+.nclex-reader .flipbook-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+/* ==========================================================================
+   Flip Zones
+   ========================================================================== */
+
+.nclex-reader .flip-zone {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  z-index: 15;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nclex-reader .flip-prev {
+  left: 0;
+  width: 56px;
+  cursor: w-resize;
+}
+
+.nclex-reader .flip-next {
+  right: 0;
+  width: 56px;
+  cursor: e-resize;
+}
+
+.nclex-reader .flip-prev::after,
+.nclex-reader .flip-next::after {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 2rem;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  font-family: var(--font-ui);
+  line-height: 1;
+}
+
+.nclex-reader .flip-prev::after {
+  content: '\2039';
+  left: 12px;
+}
+
+.nclex-reader .flip-next::after {
+  content: '\203A';
+  right: 12px;
+}
+
+.nclex-reader .flip-prev:hover::after,
+.nclex-reader .flip-next:hover::after {
+  opacity: 0.7;
+}
+
+.nclex-reader .flip-zone.at-boundary {
+  pointer-events: none;
+}
+
+.nclex-reader .flip-zone.at-boundary::after {
+  opacity: 0 !important;
+}
+
+/* ==========================================================================
+   Page Effects
+   ========================================================================== */
+
+.nclex-reader .page-shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+  background: linear-gradient(to right, var(--page-fold), transparent);
+  z-index: 5;
+}
+
+.nclex-reader .page-shadow.flipping {
+  opacity: 1;
+}
+
+.nclex-reader .page-curl {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(
+    135deg,
+    transparent 40%,
+    var(--page-fold) 40%,
+    var(--page-fold) 45%,
+    var(--bg) 45%
+  );
+  border-radius: 0 0 4px 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.3s;
+}
+
+.nclex-reader .page-curl.at-boundary {
+  opacity: 0;
+}
+
+/* ==========================================================================
+   Bottom Bar
+   ========================================================================== */
+
+.nclex-reader .bottom-bar {
+  height: var(--bottombar-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 0 20px;
+  align-items: center;
+  font-family: var(--font-ui);
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+}
+
+.nclex-reader .bb-left {
+  text-align: left;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
+}
+
+.nclex-reader .bb-center {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nclex-reader .bb-center .kb-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.nclex-reader .bb-center .kb-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.nclex-reader .bb-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.nclex-reader .bb-right .bb-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  padding: 0;
+}
+
+.nclex-reader .bb-right .bb-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.nclex-reader .bb-right .bb-btn.bookmarked {
+  color: var(--save-color);
+}
+
+/* Page Progress Bar */
+
+.nclex-reader .page-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+}
+
+.nclex-reader .page-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+/* ==========================================================================
+   Responsive – Small Screens
+   ========================================================================== */
+
+@media (max-width: 640px) {
+  .nclex-reader .reader-toolbar {
+    gap: 10px;
+    padding: 0 8px;
+  }
+
+  .nclex-reader .reader-toolbar .tb-divider {
+    display: none;
+  }
+
+  .nclex-reader .reader-toolbar .tb-label {
+    display: none;
+  }
+
+  .nclex-reader .reader-toolbar .reading-time {
+    display: none;
+  }
+
+  .nclex-reader .flipbook-content {
+    padding: 36px 20px;
+    column-gap: 60px;
+  }
+
+  .nclex-reader .flip-prev,
+  .nclex-reader .flip-next {
+    width: 40px;
+  }
+
+  .nclex-reader .bottom-bar {
+    padding: 0 12px;
+  }
+}
+
+/* ==========================================================================
+   Loading State
+   ========================================================================== */
+
+.nclex-reader .reader-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  gap: 10px;
+}
+
+.nclex-reader .reader-loading .spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: reader-spin 0.8s linear infinite;
+}
+
+@keyframes reader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================================
+   Error State
+   ========================================================================== */
+
+.nclex-reader .reader-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 1rem;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  padding: 2rem;
+  text-align: center;
+}
+
+.nclex-reader .reader-error .error-icon {
+  font-size: 2rem;
+  color: var(--error);
+}
+
+.nclex-reader .reader-error .error-message {
+  font-size: 0.9rem;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.nclex-reader .reader-error .error-retry {
+  padding: 8px 20px;
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.nclex-reader .reader-error .error-retry:hover {
+  background: var(--accent-hover);
+}
+
+/* ==========================================================================
+   NCLEX Reader Layout Container
+   ========================================================================== */
+
+.nclex-reader {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1000;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-outer);
+}

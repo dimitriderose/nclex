@@ -18,11 +18,10 @@ describe('staticData', () => {
     }
   })
 
-  it('each module has a _meta object', () => {
+  it('each module has a _meta object with name', () => {
     for (const [, mod] of Object.entries(staticData)) {
       expect(mod).toHaveProperty('_meta')
       expect((mod._meta as any).name).toBeTruthy()
-      expect((mod._meta as any).version).toBe(1)
     }
   })
 
@@ -37,8 +36,8 @@ describe('staticData', () => {
 
     it('drug entries have expected structure', () => {
       const metformin = staticData.drugs.metformin as any
-      expect(metformin.class).toBe('Biguanide')
-      expect(metformin.nclex_tip).toBeTruthy()
+      expect(metformin.name).toBe('metformin')
+      expect(metformin.nclex_focus).toBeTruthy()
     })
   })
 

@@ -208,6 +208,38 @@ class FlaggedQuestionsControllerTest {
                 controller.updateFlag(flagId, body, httpRequest)
             }.isInstanceOf(NotFoundException::class.java)
         }
+
+        @Test
+        fun `update with null category does not change category`() {
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val flag = createFlag(category = FlagCategory.REVIEW)
+            val body = UpdateFlagRequest(category = null, notes = "updated")
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.of(flag)
+            every { flaggedQuestionRepository.save(any()) } answers { firstArg() }
+
+            val result = controller.updateFlag(flagId, body, httpRequest)
+
+            assertThat(result.body!!.category).isEqualTo(FlagCategory.REVIEW) // unchanged
+            assertThat(result.body!!.notes).isEqualTo("updated")
+        }
+
+        @Test
+        fun `update with null notes does not change notes`() {
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val flag = createFlag()
+            val body = UpdateFlagRequest(category = FlagCategory.HARD, notes = null)
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.of(flag)
+            every { flaggedQuestionRepository.save(any()) } answers { firstArg() }
+
+            val result = controller.updateFlag(flagId, body, httpRequest)
+
+            assertThat(result.body!!.category).isEqualTo(FlagCategory.HARD)
+            assertThat(result.body!!.notes).isEqualTo("test notes") // original unchanged
+        }
     }
 
     // ── deleteFlag ──────────────────────────────────────────────────

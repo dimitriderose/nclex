@@ -99,4 +99,11 @@ export const handlers = [
   http.get('/api/reading-positions', () => HttpResponse.json([])),
   http.get('/api/reading-positions/:key', () => HttpResponse.json(null)),
   http.put('/api/reading-positions', () => HttpResponse.json({ id: '1', contentKey: 'test', position: {} })),
+
+  // Annotation sync
+  http.get('/api/annotations/bookmarks', () => HttpResponse.json([])),
+  http.post('/api/annotations/bookmarks/sync', () => HttpResponse.json({ bookmarks: [], serverTime: new Date().toISOString() })),
+  http.get('/api/annotations/highlights', () => HttpResponse.json([])),
+  http.post('/api/annotations/highlights/sync', () => HttpResponse.json({ highlights: [], serverTime: new Date().toISOString() })),
+  http.get('/api/annotations/changes', () => HttpResponse.json({ bookmarks: [], highlights: [], serverTime: new Date().toISOString() })),
 ]

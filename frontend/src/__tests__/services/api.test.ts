@@ -258,4 +258,59 @@ describe('api service', () => {
       expect(result).toHaveProperty('contentKey')
     })
   })
+
+  // ── Annotation sync ──────────────────────────────────────────────
+
+  describe('getBookmarks', () => {
+    it('calls GET /api/annotations/bookmarks', async () => {
+      const result = await api.getBookmarks()
+      expect(Array.isArray(result)).toBe(true)
+    })
+
+    it('calls GET /api/annotations/bookmarks with contentKey', async () => {
+      const result = await api.getBookmarks('my-book')
+      expect(Array.isArray(result)).toBe(true)
+    })
+  })
+
+  describe('syncBookmarks', () => {
+    it('calls POST /api/annotations/bookmarks/sync', async () => {
+      const result = await api.syncBookmarks([{ clientId: 'b1', contentKey: 'book1', page: 1, label: '', action: 'upsert' }])
+      expect(result).toHaveProperty('bookmarks')
+      expect(result).toHaveProperty('serverTime')
+    })
+  })
+
+  describe('getHighlights', () => {
+    it('calls GET /api/annotations/highlights', async () => {
+      const result = await api.getHighlights()
+      expect(Array.isArray(result)).toBe(true)
+    })
+
+    it('calls GET /api/annotations/highlights with contentKey', async () => {
+      const result = await api.getHighlights('my-book')
+      expect(Array.isArray(result)).toBe(true)
+    })
+  })
+
+  describe('syncHighlights', () => {
+    it('calls POST /api/annotations/highlights/sync', async () => {
+      const result = await api.syncHighlights([{
+        clientId: 'h1', contentKey: 'book1', color: 'yellow',
+        text: 'test', note: '', startXpath: '', startOffset: 0,
+        endXpath: '', endOffset: 4, action: 'upsert',
+      }])
+      expect(result).toHaveProperty('highlights')
+      expect(result).toHaveProperty('serverTime')
+    })
+  })
+
+  describe('getAnnotationChanges', () => {
+    it('calls GET /api/annotations/changes with since param', async () => {
+      const result = await api.getAnnotationChanges('2025-01-01T00:00:00Z')
+      expect(result).toHaveProperty('bookmarks')
+      expect(result).toHaveProperty('highlights')
+      expect(result).toHaveProperty('serverTime')
+    })
+  })
 })

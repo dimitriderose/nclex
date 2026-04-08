@@ -10,6 +10,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
+      exclude: [
+        'node_modules/**',
+        'src/test/**',
+        'public/sw.js',
+        'src/main.tsx',
+      ],
       thresholds: {
         lines: 90,
         branches: 90,

@@ -200,6 +200,46 @@ class NGNCaseStudyServiceTest {
         }
     }
 
+    // ── callClaude edge cases ─────────────────────────────────────────
+
+    @Nested
+    inner class CallClaudeEdgeCases {
+
+        @Test
+        fun `blank API key throws ExternalServiceException`() {
+            val serviceNoKey = NGNCaseStudyService(
+                webClient = webClientBuilder,
+                contentCacheRepository = contentCacheRepository,
+                rateLimitService = rateLimitService,
+                auditLogger = auditLogger,
+                apiKey = "",
+                apiUrl = "https://api.test.com",
+                model = "test-model"
+            )
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            // Will fall through to template fallback since LLM fails
+            val result = serviceNoKey.generateCaseStudy("heart failure", listOf("bow_tie"), "medium", "user1")
+            assertThat(result.source).isEqualTo("OpenStax Template")
+        }
+    }
+
+    // ── generateFromTemplate edge cases ────────────────────────────
+
+    @Nested
+    inner class GenerateFromTemplate {
+
+        @Test
+        fun `partial topic match finds template`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { webClientBuilder.build() } throws RuntimeException("API down")
+
+            // "diabetic ketoacidosis" contains "diabetic ketoacidosis"
+            val result = service.generateCaseStudy("diabetic ketoacidosis", listOf("matrix"), "medium", "user1")
+            assertThat(result.title).isEqualTo("Diabetic Ketoacidosis Management")
+        }
+    }
+
     // ── parseSafetyResponse ─────────────────────────────────────────
 
     @Nested
@@ -239,6 +279,227 @@ class NGNCaseStudyServiceTest {
             assertThat(result.issues).anyMatch { it.contains("Parse error") }
             assertThat(result.confidence).isEqualTo(0.0)
             assertThat(result.recommendation).isEqualTo("Manual review required")
+        }
+
+        @Test
+        fun `JSON with missing fields uses defaults`() {
+            // This covers the null-coalescing branches in parseSafetyResponse
+            val safetyJson = """{}"""
+            mockClaudeCall(safetyJson)
+
+            val caseStudy = CaseStudyResponse(
+                id = "1", title = "Test", scenario = "Scenario",
+                tabs = emptyList(), questions = emptyList(),
+                topic = "topic", source = "test", safetyValidated = false,
+                createdAt = "2024-01-01"
+            )
+
+            val result = service.safetyValidate(caseStudy)
+            assertThat(result.safe).isFalse() // default
+            assertThat(result.issues).isEmpty() // default
+            assertThat(result.confidence).isEqualTo(0.0) // default
+            assertThat(result.recommendation).isEmpty() // default
+        }
+    }
+
+    // ── parseCaseStudyResponse edge cases ────────────────────────────
+
+    @Nested
+    inner class ParseCaseStudyResponseEdgeCases {
+
+        @Test
+        fun `JSON with missing optional fields uses defaults`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            // JSON with no title, no scenario, minimal tabs/questions
+            val caseJson = """
+                {
+                    "tabs": [{"type":"nurses_notes"}],
+                    "questions": [{"data":{},"maxScore":1}]
+                }
+            """.trimIndent()
+
+            val safetyJson = """{"safe":true,"issues":[],"confidence":0.9,"recommendation":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to caseJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to safetyJson))))
+            )
+
+            val result = service.generateCaseStudy("topic", listOf("bow_tie"), "medium", "user1")
+
+            // title defaults to "Case Study: topic"
+            assertThat(result.title).contains("topic")
+            assertThat(result.scenario).isNotNull
+        }
+
+        @Test
+        fun `JSON with null tabs and questions defaults to empty lists`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            // JSON with explicit null for tabs and questions
+            val caseJson = """
+                {
+                    "title": "Test",
+                    "scenario": "Scenario"
+                }
+            """.trimIndent()
+
+            val safetyJson = """{"safe":true,"issues":[],"confidence":0.9,"recommendation":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to caseJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to safetyJson))))
+            )
+
+            val result = service.generateCaseStudy("topic", listOf("bow_tie"), "medium", "user1")
+
+            assertThat(result.tabs).isEmpty()
+            assertThat(result.questions).isEmpty()
+        }
+
+        @Test
+        fun `valid UUID userId covers UUID fromString success branch`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            val caseJson = """
+                {
+                    "title": "Case",
+                    "scenario": "Sc",
+                    "tabs": [],
+                    "questions": []
+                }
+            """.trimIndent()
+            val safetyJson = """{"safe":true,"issues":[],"confidence":0.9,"recommendation":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to caseJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to safetyJson))))
+            )
+
+            // Use a valid UUID string to cover the UUID.fromString success branch
+            val validUUID = java.util.UUID.randomUUID().toString()
+            val result = service.generateCaseStudy("topic", listOf("bow_tie"), "medium", validUUID)
+
+            assertThat(result).isNotNull
+            verify { auditLogger.log(eq("NGN_CASE_GENERATED"), any(), any(), any(), any()) }
+        }
+
+        @Test
+        fun `template fallback with valid UUID userId`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { webClientBuilder.build() } throws RuntimeException("API down")
+
+            val validUUID = java.util.UUID.randomUUID().toString()
+            val result = service.generateCaseStudy("heart failure", listOf("bow_tie"), "medium", validUUID)
+
+            assertThat(result.source).isEqualTo("OpenStax Template")
+        }
+
+        @Test
+        fun `MC fallback with valid UUID userId`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { webClientBuilder.build() } throws RuntimeException("API down")
+
+            val validUUID = java.util.UUID.randomUUID().toString()
+            val result = service.generateCaseStudy("obscure rare topic xyz", listOf("bow_tie"), "medium", validUUID)
+
+            assertThat(result.source).isEqualTo("Offline Fallback")
+        }
+    }
+
+    // ── callClaude response edge cases ────────────────────────────────
+
+    @Nested
+    inner class CallClaudeResponseEdgeCases {
+
+        @Test
+        fun `response with invalid content format throws during generation`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            // content is not a List<Map>, it's a string
+            every { responseSpec.bodyToMono(Map::class.java) } returns Mono.just(
+                mapOf("content" to "not-a-list")
+            )
+
+            // LLM fails, falls back to template
+            val result = service.generateCaseStudy("heart failure", listOf("bow_tie"), "medium", "user1")
+            assertThat(result.source).isEqualTo("OpenStax Template")
+        }
+
+        @Test
+        fun `response with no text type in content falls back`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returns Mono.just(
+                mapOf("content" to listOf(mapOf("type" to "image", "url" to "http://...")))
+            )
+
+            val result = service.generateCaseStudy("heart failure", listOf("bow_tie"), "medium", "user1")
+            assertThat(result.source).isEqualTo("OpenStax Template")
+        }
+
+        @Test
+        fun `empty response body falls back`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returns Mono.empty()
+
+            val result = service.generateCaseStudy("heart failure", listOf("bow_tie"), "medium", "user1")
+            assertThat(result.source).isEqualTo("OpenStax Template")
+        }
+    }
+
+    // ── generateFromTemplate partial match ────────────────────────────
+
+    @Nested
+    inner class GenerateFromTemplatePartial {
+
+        @Test
+        fun `topic that partially matches via contains finds template`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { webClientBuilder.build() } throws RuntimeException("API down")
+
+            // "failure" partially matches "heart failure" template
+            val result = service.generateCaseStudy("failure", listOf("bow_tie"), "medium", "user1")
+            assertThat(result.title).isEqualTo("Heart Failure Exacerbation")
+            assertThat(result.source).isEqualTo("OpenStax Template")
         }
     }
 }
