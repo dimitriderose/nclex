@@ -7,28 +7,19 @@ import com.nclex.model.ExamStatus
 import com.nclex.repository.ExamSessionRepository
 import com.nclex.repository.UserStatsRepository
 import io.mockk.*
-import io.mockk.impl.annotations.MockK
-import io.mockk.junit5.MockKExtension
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Instant
 import java.util.*
 
-@ExtendWith(MockKExtension::class)
 class ExamSimulationServiceTest {
 
-    @MockK
-    private lateinit var examSessionRepository: ExamSessionRepository
-
-    @MockK
-    private lateinit var userStatsRepository: UserStatsRepository
-
-    @MockK
-    private lateinit var auditLogger: AuditLogger
+    private val examSessionRepository: ExamSessionRepository = mockk()
+    private val userStatsRepository: UserStatsRepository = mockk()
+    private val auditLogger: AuditLogger = mockk()
 
     private lateinit var service: ExamSimulationService
 
@@ -155,8 +146,7 @@ class ExamSimulationServiceTest {
             every { examSessionRepository.findById(session.id) } returns Optional.of(session)
             every { examSessionRepository.save(any()) } answers { firstArg() }
 
-            // Use mockkStatic to control Random for deterministic "correct" answer
-            mockkStatic(kotlin.random.Random::class)
+            mockkObject(kotlin.random.Random)
             every { kotlin.random.Random.nextDouble() } returns 0.0 // always correct
 
             val result = service.submitAnswer(userId, session.id, AnswerRequest("q1", "A", 30))
@@ -166,7 +156,7 @@ class ExamSimulationServiceTest {
                 assertThat(session.currentDifficulty).isLessThanOrEqualTo(0.95)
             }
 
-            unmockkStatic(kotlin.random.Random::class)
+            unmockkObject(kotlin.random.Random)
         }
 
         @Test
@@ -175,7 +165,7 @@ class ExamSimulationServiceTest {
             every { examSessionRepository.findById(session.id) } returns Optional.of(session)
             every { examSessionRepository.save(any()) } answers { firstArg() }
 
-            mockkStatic(kotlin.random.Random::class)
+            mockkObject(kotlin.random.Random)
             every { kotlin.random.Random.nextDouble() } returns 0.99 // always incorrect
 
             val result = service.submitAnswer(userId, session.id, AnswerRequest("q1", "A", 30))
@@ -185,7 +175,7 @@ class ExamSimulationServiceTest {
                 assertThat(session.currentDifficulty).isGreaterThanOrEqualTo(0.1)
             }
 
-            unmockkStatic(kotlin.random.Random::class)
+            unmockkObject(kotlin.random.Random)
         }
 
         @Test
@@ -223,13 +213,25 @@ class ExamSimulationServiceTest {
 
         @Test
         fun `at MAX_QUESTIONS (145) exam finishes - pass when difficulty above 0_5`() {
+            // Build a question history of 144 items so that after adding one more it becomes 145
+            val history = (1..144).map { i ->
+                mapOf<String, Any>(
+                    "questionId" to "q$i",
+                    "selectedAnswer" to "A",
+                    "correct" to true,
+                    "difficulty" to 0.6,
+                    "timeSpentSeconds" to 30,
+                    "timestamp" to Instant.now().toString()
+                )
+            }
             val session = ExamSession(
                 userId = userId,
                 status = ExamStatus.IN_PROGRESS,
                 totalQuestions = 144, // will become 145 after this answer
                 correctCount = 80,
                 currentDifficulty = 0.6,
-                startedAt = Instant.now()
+                startedAt = Instant.now(),
+                questionHistory = history
             )
             every { examSessionRepository.findById(session.id) } returns Optional.of(session)
             every { examSessionRepository.save(any()) } answers { firstArg() }
@@ -285,7 +287,7 @@ class ExamSimulationServiceTest {
             every { examSessionRepository.save(any()) } answers { firstArg() }
 
             // Force a correct answer
-            mockkStatic(kotlin.random.Random::class)
+            mockkObject(kotlin.random.Random)
             every { kotlin.random.Random.nextDouble() } returns 0.01
 
             val result = service.submitAnswer(userId, session.id, AnswerRequest("q100", "A", 30))
@@ -296,7 +298,7 @@ class ExamSimulationServiceTest {
                 assertThat(result["passPrediction"]).isEqualTo(true)
             }
 
-            unmockkStatic(kotlin.random.Random::class)
+            unmockkObject(kotlin.random.Random)
         }
 
         @Test
@@ -323,7 +325,7 @@ class ExamSimulationServiceTest {
             every { examSessionRepository.findById(session.id) } returns Optional.of(session)
             every { examSessionRepository.save(any()) } answers { firstArg() }
 
-            mockkStatic(kotlin.random.Random::class)
+            mockkObject(kotlin.random.Random)
             every { kotlin.random.Random.nextDouble() } returns 0.99 // always incorrect
 
             val result = service.submitAnswer(userId, session.id, AnswerRequest("q100", "A", 30))
@@ -333,7 +335,7 @@ class ExamSimulationServiceTest {
                 assertThat(result["passPrediction"]).isEqualTo(false)
             }
 
-            unmockkStatic(kotlin.random.Random::class)
+            unmockkObject(kotlin.random.Random)
         }
     }
 

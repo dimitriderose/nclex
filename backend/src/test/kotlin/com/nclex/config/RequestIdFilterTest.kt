@@ -1,6 +1,7 @@
 package com.nclex.config
 
 import io.mockk.*
+import jakarta.servlet.DispatcherType
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -20,10 +21,14 @@ class RequestIdFilterTest {
     @BeforeEach
     fun setUp() {
         filter = RequestIdFilter()
-        request = mockk()
+        request = mockk(relaxed = true)
         response = mockk(relaxed = true)
         filterChain = mockk()
         MDC.clear()
+
+        // OncePerRequestFilter needs these to decide whether to invoke doFilterInternal
+        every { request.getAttribute(any()) } returns null
+        every { request.dispatcherType } returns DispatcherType.REQUEST
     }
 
     @Test

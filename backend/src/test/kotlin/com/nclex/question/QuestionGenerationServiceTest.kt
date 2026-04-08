@@ -450,12 +450,12 @@ class QuestionGenerationServiceTest {
             val questionJson = """{"stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],"rationale":"R","ncjmmStep":"take_action"}"""
             val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
 
-            val bodySlot = slot<Any>()
+            val capturedBodies = mutableListOf<Any>()
             every { webClientBuilder.build() } returns webClient
             every { webClient.post() } returns requestBodyUriSpec
             every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
             every { requestBodySpec.header(any(), any()) } returns requestBodySpec
-            every { requestBodySpec.bodyValue(capture(bodySlot)) } returns requestHeadersSpec
+            every { requestBodySpec.bodyValue(capture(capturedBodies)) } returns requestHeadersSpec
             every { requestHeadersSpec.retrieve() } returns responseSpec
             every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
                 Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
@@ -465,7 +465,7 @@ class QuestionGenerationServiceTest {
             service.generateQuestion("topic", "mc", "hard", "take_action", null, "user1")
 
             @Suppress("UNCHECKED_CAST")
-            val body = bodySlot.captured as Map<String, Any>
+            val body = capturedBodies[0] as Map<String, Any>
             val systemPrompt = body["system"] as String
             assertThat(systemPrompt).contains("take_action")
             assertThat(systemPrompt).contains("MUST target")
@@ -479,12 +479,12 @@ class QuestionGenerationServiceTest {
             val questionJson = """{"stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],"rationale":"R","ncjmmStep":"recognize_cues"}"""
             val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
 
-            val bodySlot = slot<Any>()
+            val capturedBodies = mutableListOf<Any>()
             every { webClientBuilder.build() } returns webClient
             every { webClient.post() } returns requestBodyUriSpec
             every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
             every { requestBodySpec.header(any(), any()) } returns requestBodySpec
-            every { requestBodySpec.bodyValue(capture(bodySlot)) } returns requestHeadersSpec
+            every { requestBodySpec.bodyValue(capture(capturedBodies)) } returns requestHeadersSpec
             every { requestHeadersSpec.retrieve() } returns responseSpec
             every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
                 Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
@@ -494,7 +494,7 @@ class QuestionGenerationServiceTest {
             service.generateQuestion("topic", "mc", "medium", null, null, "user1")
 
             @Suppress("UNCHECKED_CAST")
-            val body = bodySlot.captured as Map<String, Any>
+            val body = capturedBodies[0] as Map<String, Any>
             val systemPrompt = body["system"] as String
             assertThat(systemPrompt).contains("Assign the most appropriate")
         }
