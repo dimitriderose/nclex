@@ -609,6 +609,169 @@ class AnnotationsControllerTest {
             }.isInstanceOf(ResponseStatusException::class.java)
                 .hasMessageContaining("required")
         }
+
+        @Test
+        fun `missing contentKey on new highlight returns 400`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, any()) } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = null, color = "yellow",
+                        text = "text", startXpath = "/div", startOffset = 0, endXpath = "/div", endOffset = 5)
+                )
+            )
+
+            assertThatThrownBy {
+                controller.syncHighlights(body, request)
+            }.isInstanceOf(ResponseStatusException::class.java)
+                .hasMessageContaining("contentKey required")
+        }
+
+        @Test
+        fun `missing color on new highlight returns 400`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, any()) } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", color = null,
+                        text = "text", startXpath = "/div", startOffset = 0, endXpath = "/div", endOffset = 5)
+                )
+            )
+
+            assertThatThrownBy {
+                controller.syncHighlights(body, request)
+            }.isInstanceOf(ResponseStatusException::class.java)
+                .hasMessageContaining("color required")
+        }
+
+        @Test
+        fun `missing startXpath on new highlight returns 400`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, any()) } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", color = "yellow",
+                        text = "text", startXpath = null, startOffset = 0, endXpath = "/div", endOffset = 5)
+                )
+            )
+
+            assertThatThrownBy {
+                controller.syncHighlights(body, request)
+            }.isInstanceOf(ResponseStatusException::class.java)
+                .hasMessageContaining("startXpath required")
+        }
+
+        @Test
+        fun `missing startOffset on new highlight returns 400`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, any()) } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", color = "yellow",
+                        text = "text", startXpath = "/div", startOffset = null, endXpath = "/div", endOffset = 5)
+                )
+            )
+
+            assertThatThrownBy {
+                controller.syncHighlights(body, request)
+            }.isInstanceOf(ResponseStatusException::class.java)
+                .hasMessageContaining("startOffset required")
+        }
+
+        @Test
+        fun `missing endXpath on new highlight returns 400`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, any()) } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", color = "yellow",
+                        text = "text", startXpath = "/div", startOffset = 0, endXpath = null, endOffset = 5)
+                )
+            )
+
+            assertThatThrownBy {
+                controller.syncHighlights(body, request)
+            }.isInstanceOf(ResponseStatusException::class.java)
+                .hasMessageContaining("endXpath required")
+        }
+
+        @Test
+        fun `missing endOffset on new highlight returns 400`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, any()) } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", color = "yellow",
+                        text = "text", startXpath = "/div", startOffset = 0, endXpath = "/div", endOffset = null)
+                )
+            )
+
+            assertThatThrownBy {
+                controller.syncHighlights(body, request)
+            }.isInstanceOf(ResponseStatusException::class.java)
+                .hasMessageContaining("endOffset required")
+        }
+
+        @Test
+        fun `delete of non-existent highlight clientId is no-op`() {
+            mockAuth()
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, listOf("ghost")) } returns emptyList()
+            every { highlightRepository.findByUserIdAndContentKey(userId, "book-1") } returns emptyList()
+
+            val body = HighlightSyncRequest(
+                items = listOf(HighlightSyncItem(action = "delete", clientId = "ghost", contentKey = "book-1"))
+            )
+
+            val result = controller.syncHighlights(body, request)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            verify(exactly = 0) { highlightRepository.save(any()) }
+        }
+
+        @Test
+        fun `update existing highlight with null color keeps original`() {
+            mockAuth()
+            val existing = makeHighlight(clientId = "h1", color = "yellow")
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, listOf("h1")) } returns listOf(existing)
+            every { highlightRepository.save(any()) } answers { firstArg() }
+            every { highlightRepository.findByUserIdAndContentKey(userId, "book-1") } returns listOf(existing)
+
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", color = null, text = null)
+                )
+            )
+
+            val result = controller.syncHighlights(body, request)
+
+            assertThat(result.body!!.highlights[0].color).isEqualTo("yellow")
+        }
+
+        @Test
+        fun `note truncated to 2000 on update`() {
+            mockAuth()
+            val existing = makeHighlight(clientId = "h1", note = "old")
+            every { highlightRepository.findAllByUserIdAndClientIdIn(userId, listOf("h1")) } returns listOf(existing)
+            every { highlightRepository.save(any()) } answers { firstArg() }
+            every { highlightRepository.findByUserIdAndContentKey(userId, "book-1") } returns listOf(existing)
+
+            val longNote = "n".repeat(3000)
+            val body = HighlightSyncRequest(
+                items = listOf(
+                    HighlightSyncItem(action = "upsert", clientId = "h1", contentKey = "book-1", note = longNote)
+                )
+            )
+
+            val result = controller.syncHighlights(body, request)
+
+            assertThat(result.body!!.highlights[0].note).hasSize(2000)
+        }
     }
 
     // ── GetChanges ─────────────────────────────────────────────────

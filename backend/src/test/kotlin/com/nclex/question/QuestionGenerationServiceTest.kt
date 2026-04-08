@@ -437,6 +437,374 @@ class QuestionGenerationServiceTest {
         }
     }
 
+    // ── parseQuestionResponse - dosage type ──────────────────────────
+
+    @Nested
+    inner class DosageType {
+
+        @Test
+        fun `dosage question type includes calculation field`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            val questionJson = """{
+                "stem":"Calculate the dosage",
+                "options":[{"id":"A","text":"2.5 mg","isCorrect":true},{"id":"B","text":"5 mg","isCorrect":false}],
+                "rationale":"Calculation based on weight",
+                "ncjmmStep":"generate_solutions",
+                "calculation":{"formula":"dose = weight * factor","correctAnswer":2.5,"unit":"mg","tolerance":0.1}
+            }""".trimIndent()
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("dosage", "dosage", "medium", null, null, "user1")
+
+            assertThat(result.calculation).isNotNull
+            assertThat(result.calculation!!.formula).isEqualTo("dose = weight * factor")
+            assertThat(result.calculation!!.correctAnswer).isEqualTo(2.5)
+            assertThat(result.calculation!!.unit).isEqualTo("mg")
+            assertThat(result.calculation!!.tolerance).isEqualTo(0.1)
+        }
+
+        @Test
+        fun `non-dosage question type has no partialCredit`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            val questionJson = """{"stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],"rationale":"R","ncjmmStep":"recognize_cues"}"""
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            assertThat(result.partialCredit).isNull()
+        }
+
+        @Test
+        fun `null calculation in JSON results in null calculation`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            val questionJson = """{"stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],"rationale":"R","ncjmmStep":"recognize_cues","calculation":null}"""
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            assertThat(result.calculation).isNull()
+        }
+    }
+
+    // ── callClaude edge cases ──────────────────────────────────────
+
+    @Nested
+    inner class CallClaudeEdgeCases {
+
+        @Test
+        fun `empty response body throws ExternalServiceException`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returns Mono.empty()
+
+            assertThatThrownBy {
+                service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            }.isInstanceOf(ExternalServiceException::class.java)
+                .hasMessageContaining("Empty response")
+        }
+
+        @Test
+        fun `invalid content format throws ExternalServiceException`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returns Mono.just(mapOf("no_content" to "value"))
+
+            assertThatThrownBy {
+                service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            }.isInstanceOf(ExternalServiceException::class.java)
+                .hasMessageContaining("Invalid response format")
+        }
+
+        @Test
+        fun `response with no text content throws ExternalServiceException`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returns Mono.just(
+                mapOf("content" to listOf(mapOf("type" to "image", "url" to "http://...")))
+            )
+
+            assertThatThrownBy {
+                service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            }.isInstanceOf(ExternalServiceException::class.java)
+                .hasMessageContaining("No text content")
+        }
+    }
+
+    // ── Companion object ──────────────────────────────────────────
+
+    @Nested
+    inner class CompanionObject {
+
+        @Test
+        fun `NCJMM_STEPS has all 6 steps`() {
+            assertThat(QuestionGenerationService.NCJMM_STEPS).hasSize(6)
+            assertThat(QuestionGenerationService.NCJMM_STEPS).contains("recognize_cues", "take_action", "evaluate_outcomes")
+        }
+
+        @Test
+        fun `QUESTION_TYPES has expected types`() {
+            assertThat(QuestionGenerationService.QUESTION_TYPES).contains("mc", "sata", "dosage", "pharmacology")
+        }
+    }
+
+    // ── parseQuestionResponse missing field branches ─────────────────
+
+    @Nested
+    inner class ParseQuestionResponseMissingFields {
+
+        @Test
+        fun `JSON with missing option fields uses defaults`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            // Options with missing id, text, isCorrect
+            val questionJson = """{
+                "stem":"Q",
+                "options":[{"isCorrect":true},{"id":"B"}],
+                "rationale":"R",
+                "ncjmmStep":"recognize_cues"
+            }""".trimIndent()
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            assertThat(result.options).hasSize(2)
+        }
+
+        @Test
+        fun `JSON with missing stem, rationale, ncjmmStep, difficulty uses defaults`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            // Minimal JSON with only options
+            val questionJson = """{
+                "options":[{"id":"A","text":"A","isCorrect":true}]
+            }""".trimIndent()
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            assertThat(result.stem).isEqualTo("Question generation failed") // default
+            assertThat(result.rationale).isEmpty() // default
+            assertThat(result.ncjmmStep).isEqualTo("recognize_cues") // default
+            assertThat(result.difficulty).isEqualTo("medium") // default
+        }
+
+        @Test
+        fun `JSON without source and sourceKey fields uses defaults`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            // Omit source and sourceKey entirely so tree["source"] returns null (Java null)
+            val questionJson = """{
+                "stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],
+                "rationale":"R","ncjmmStep":"recognize_cues"
+            }""".trimIndent()
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("mytopic", "mc", "medium", null, null, "user1")
+            assertThat(result.source).isEqualTo("Generated") // default when missing
+            assertThat(result.sourceKey).isEqualTo("mytopic") // default to topic
+        }
+
+        @Test
+        fun `calculation with missing formula, unit, correctAnswer uses defaults`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            val questionJson = """{
+                "stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],
+                "rationale":"R","ncjmmStep":"recognize_cues",
+                "calculation":{}
+            }""".trimIndent()
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("topic", "dosage", "medium", null, null, "user1")
+            assertThat(result.calculation).isNotNull
+            assertThat(result.calculation!!.formula).isEmpty()
+            assertThat(result.calculation!!.correctAnswer).isEqualTo(0.0)
+            assertThat(result.calculation!!.unit).isEmpty()
+            assertThat(result.calculation!!.tolerance).isNull()
+        }
+
+        @Test
+        fun `validation with null suggestedStep keeps original step`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            val questionJson = """{"stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],"rationale":"R","ncjmmStep":"recognize_cues"}"""
+            // isValid=false but suggestedStep is null
+            val validationJson = """{"isValid":false,"suggestedStep":null,"confidence":0.8,"reasoning":"unsure"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            val result = service.generateQuestion("topic", "mc", "medium", null, null, "user1")
+            // suggestedStep is null, so original step is kept
+            assertThat(result.ncjmmStep).isEqualTo("recognize_cues")
+        }
+
+        @Test
+        fun `generateQuestion with valid UUID userId`() {
+            every { rateLimitService.tryConsumeClaude(any()) } returns true
+            every { contentCacheRepository.searchByKeyOrSource(any(), any()) } returns emptyList()
+
+            val questionJson = """{"stem":"Q","options":[{"id":"A","text":"A","isCorrect":true}],"rationale":"R","ncjmmStep":"recognize_cues"}"""
+            val validationJson = """{"isValid":true,"confidence":0.9,"reasoning":"ok"}"""
+
+            every { webClientBuilder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.header(any(), any()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Map::class.java) } returnsMany listOf(
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to questionJson)))),
+                Mono.just(mapOf("content" to listOf(mapOf("type" to "text", "text" to validationJson))))
+            )
+
+            // Use valid UUID string to cover the UUID.fromString success branch
+            val validUUID = UUID.randomUUID().toString()
+            val result = service.generateQuestion("topic", "mc", "medium", null, null, validUUID)
+            assertThat(result).isNotNull
+        }
+    }
+
+    // ── parseValidationResponse missing field branches ─────────────
+
+    @Nested
+    inner class ParseValidationResponseMissingFields {
+
+        @Test
+        fun `JSON with missing isValid, confidence, reasoning uses defaults`() {
+            // Cover null-coalescing branches in parseValidationResponse
+            val validationJson = """{}"""
+            mockClaudeCall(validationJson)
+
+            val result = service.validateNCJMMTag("stem", "step", "rationale")
+            assertThat(result.isValid).isTrue() // default
+            assertThat(result.confidence).isEqualTo(0.5) // default
+            assertThat(result.reasoning).isEqualTo("No reasoning provided") // default
+        }
+
+        @Test
+        fun `suggestedStep value of literal null string is filtered out`() {
+            val validationJson = """{"isValid":true,"suggestedStep":"null","confidence":0.9,"reasoning":"ok"}"""
+            mockClaudeCall(validationJson)
+
+            val result = service.validateNCJMMTag("stem", "step", "rationale")
+            assertThat(result.suggestedStep).isNull() // "null" string filtered by takeIf
+        }
+    }
+
     // ── buildGenerationSystemPrompt ─────────────────────────────────
 
     @Nested

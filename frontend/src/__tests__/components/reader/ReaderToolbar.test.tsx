@@ -106,4 +106,110 @@ describe('ReaderToolbar', () => {
     expect(screen.getByText('3')).toBeInTheDocument()
     expect(screen.getByText('7')).toBeInTheDocument()
   })
+
+  it('fullscreen button toggles fullscreen when enabled', () => {
+    Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true })
+    Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true, writable: true })
+    const mockRequestFullscreen = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(document.documentElement, 'requestFullscreen', { value: mockRequestFullscreen, configurable: true })
+
+    renderToolbar()
+    const fsBtn = screen.getByLabelText('Toggle fullscreen')
+    fireEvent.click(fsBtn)
+    expect(mockRequestFullscreen).toHaveBeenCalled()
+  })
+
+  it('fullscreen button exits fullscreen when already fullscreen', () => {
+    Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true })
+    Object.defineProperty(document, 'fullscreenElement', { value: document.documentElement, configurable: true, writable: true })
+    const mockExitFullscreen = vi.fn().mockResolvedValue(undefined)
+    document.exitFullscreen = mockExitFullscreen
+
+    renderToolbar()
+    const fsBtn = screen.getByLabelText('Toggle fullscreen')
+    fireEvent.click(fsBtn)
+    expect(mockExitFullscreen).toHaveBeenCalled()
+  })
+
+  it('no fullscreen button when not supported', () => {
+    Object.defineProperty(document, 'fullscreenEnabled', { value: false, configurable: true })
+    renderToolbar()
+    expect(screen.queryByLabelText('Toggle fullscreen')).toBeNull()
+  })
+
+  it('displays reading time text', () => {
+    renderToolbar({ readingTimeText: '~10 min read' })
+    expect(screen.getByText('~10 min read')).toBeInTheDocument()
+  })
+
+  it('shows Stop button when isListening is true', () => {
+    renderToolbar({ isListening: true })
+    expect(screen.getByLabelText('Stop listening')).toBeInTheDocument()
+  })
+
+  it('clicking Listen calls onListen', () => {
+    const props = renderToolbar({ isListening: false })
+    fireEvent.click(screen.getByLabelText('Listen'))
+    expect(props.onListen).toHaveBeenCalled()
+  })
+
+  it('clicking spacing button calls cycleLineHeight', () => {
+    const { prefs } = renderToolbar()
+    fireEvent.click(screen.getByText('Spacing'))
+    expect(prefs.cycleLineHeight).toHaveBeenCalled()
+  })
+
+  it('clicking margins button calls cycleMargin', () => {
+    const { prefs } = renderToolbar()
+    fireEvent.click(screen.getByText('Margins'))
+    expect(prefs.cycleMargin).toHaveBeenCalled()
+  })
+
+  it('displays correct spacing label for compact preset', () => {
+    renderToolbar({ lineHeightPreset: 'compact' })
+    expect(screen.getByText('Tight')).toBeInTheDocument()
+  })
+
+  it('displays correct spacing label for relaxed preset', () => {
+    renderToolbar({ lineHeightPreset: 'relaxed' })
+    expect(screen.getByText('Loose')).toBeInTheDocument()
+  })
+
+  it('displays correct margin label for narrow preset', () => {
+    renderToolbar({ marginPreset: 'narrow' })
+    expect(screen.getByText('Narrow')).toBeInTheDocument()
+  })
+
+  it('displays correct margin label for wide preset', () => {
+    renderToolbar({ marginPreset: 'wide' })
+    expect(screen.getByText('Wide')).toBeInTheDocument()
+  })
+
+  it('toggleFont button calls toggleFont', () => {
+    const { prefs } = renderToolbar()
+    fireEvent.click(screen.getByText('Serif'))
+    expect(prefs.toggleFont).toHaveBeenCalled()
+  })
+
+  it('Library close button calls onClose', () => {
+    const props = renderToolbar()
+    fireEvent.click(screen.getByLabelText('Library'))
+    expect(props.onClose).toHaveBeenCalled()
+  })
+
+  it('no badge when counts are 0', () => {
+    renderToolbar({ highlightCount: 0, bookmarkCount: 0 })
+    expect(document.querySelectorAll('.tb-badge').length).toBe(0)
+  })
+
+  it('removes bookmark/highlight/bookmark buttons when handlers not provided', () => {
+    renderToolbar({
+      onToggleBookmark: undefined,
+      onToggleBookmarks: undefined,
+      onToggleHighlights: undefined,
+    })
+    expect(screen.queryByLabelText('Bookmark this page')).toBeNull()
+    expect(screen.queryByLabelText('Open bookmarks')).toBeNull()
+    expect(screen.queryByLabelText('Open highlights')).toBeNull()
+  })
 })

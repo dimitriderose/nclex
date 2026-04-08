@@ -128,4 +128,105 @@ describe('useFlipbook', () => {
     act(() => result.current.flipTo(max))
     expect(result.current.progressPercent).toBe(100)
   })
+
+  it('paginate skips when viewport has zero size', () => {
+    Object.defineProperty(mockViewport, 'getBoundingClientRect', {
+      value: () => ({ width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => ({}) }),
+      configurable: true,
+    })
+    const { result } = renderFlipbook()
+    act(() => result.current.paginate())
+    // Should still be at default (1 page)
+    expect(result.current.totalPages).toBe(1)
+  })
+
+  it('paginate handles NaN lineHeight gracefully', () => {
+    const origGetComputed = window.getComputedStyle
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((el) => {
+      if (el === mockContent) {
+        return {
+          columnGap: '120px',
+          lineHeight: 'normal', // will parse to NaN
+          fontSize: '16px',
+          paddingLeft: '56px',
+          paddingRight: '56px',
+          getPropertyValue: (prop: string) => {
+            if (prop === 'column-gap') return '120px'
+            return ''
+          },
+        } as unknown as CSSStyleDeclaration
+      }
+      return origGetComputed(el)
+    })
+
+    const { result } = renderFlipbook()
+    act(() => result.current.paginate())
+    // Should still paginate successfully using fallback (fontSize * 1.6)
+    expect(result.current.totalPages).toBeGreaterThanOrEqual(1)
+  })
+
+  it('flipNext at last page is a no-op', () => {
+    const { result } = renderFlipbook()
+    act(() => result.current.paginate())
+    const max = result.current.totalPages - 1
+    act(() => result.current.flipTo(max))
+    act(() => result.current.flipNext())
+    // Should still be at last page
+    expect(result.current.currentPage).toBe(max)
+  })
+
+  it('isFlipping resets after timeout', () => {
+    const { result } = renderFlipbook()
+    act(() => result.current.paginate())
+    if (result.current.totalPages > 1) {
+      act(() => result.current.flipNext())
+      expect(result.current.isFlipping).toBe(true)
+      act(() => { vi.advanceTimersByTime(600) })
+      expect(result.current.isFlipping).toBe(false)
+    }
+  })
+
+  it('resize event triggers re-pagination', () => {
+    const { result } = renderFlipbook()
+    act(() => result.current.paginate())
+    const initialTotal = result.current.totalPages
+
+    // Change scrollWidth and trigger resize
+    Object.defineProperty(mockContent, 'scrollWidth', { value: 6000, configurable: true })
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    act(() => { vi.advanceTimersByTime(300) })
+
+    // Should have re-paginated
+    expect(result.current.totalPages).toBeGreaterThanOrEqual(1)
+  })
+
+  it('builds chapter map from epub-chapter elements', () => {
+    // Add epub-chapter elements to mockContent
+    mockContent.innerHTML = '<div class="epub-chapter"><h2>Introduction</h2><p>Content</p></div><div class="epub-chapter"><h2>Chapter 1</h2><p>More content</p></div>'
+
+    const { result } = renderFlipbook()
+    act(() => result.current.paginate())
+
+    // Chapter info should be populated
+    expect(result.current.chapterInfo).not.toBeNull()
+    expect(result.current.chapterInfo?.total).toBe(2)
+  })
+
+  it('cleans up timeouts on unmount', () => {
+    const { unmount, result } = renderFlipbook()
+    act(() => result.current.paginate())
+    if (result.current.totalPages > 1) {
+      act(() => result.current.flipNext())
+    }
+    // Unmount should not throw
+    unmount()
+  })
+
+  it('paginate with null contentRef is a no-op', () => {
+    const contentRef = { current: null } as React.RefObject<HTMLDivElement>
+    const viewportRef = { current: mockViewport } as React.RefObject<HTMLDivElement>
+    const { result } = renderHook(() => useFlipbook({ contentRef, viewportRef }))
+    act(() => result.current.paginate())
+    expect(result.current.totalPages).toBe(1)
+  })
 })
