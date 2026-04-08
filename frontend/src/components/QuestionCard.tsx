@@ -100,7 +100,7 @@ export function QuestionCard({ question, onAnswer, showRationale: forceShowRatio
         <span className="badge badge-type">{question.type.toUpperCase()}</span>
         <span className="badge badge-difficulty">{question.difficulty}</span>
         <span className="badge badge-ncjmm">{ncjmmLabel}</span>
-        {question.ncjmmValidated && <span className="badge badge-validated" title="NCJMM tag validated">\u2713</span>}
+        {question.ncjmmValidated && <span className="badge badge-validated" title="NCJMM tag validated">{'\u2713'}</span>}
       </div>
 
       {/* Topic */}
@@ -124,8 +124,8 @@ export function QuestionCard({ question, onAnswer, showRationale: forceShowRatio
             >
               <span className="option-letter">{option.id}</span>
               <span className="option-text">{option.text}</span>
-              {submitted && option.isCorrect && <span className="option-check">\u2713</span>}
-              {submitted && selectedIds.includes(option.id) && !option.isCorrect && <span className="option-x">\u2717</span>}
+              {submitted && option.isCorrect && <span className="option-check">{'\u2713'}</span>}
+              {submitted && selectedIds.includes(option.id) && !option.isCorrect && <span className="option-x">{'\u2717'}</span>}
             </button>
           ))}
         </div>

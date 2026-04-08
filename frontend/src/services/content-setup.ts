@@ -8,6 +8,7 @@
 import { localStorageManager, STATIC_MODULES } from './localstorage-manager';
 import type { DBMeta, StaticModule } from './localstorage-manager';
 import { indexedDBStore } from './indexeddb-store';
+import { indexBundledContent } from './index-bundled-content';
 import { staticData } from '../data/static-modules';
 
 export type SetupPhase = 'checking' | 'phase1' | 'phase2' | 'complete';
@@ -79,21 +80,39 @@ export const contentSetup = {
    * This is user-triggered and may take time
    */
   async runPhase2(onProgress?: ProgressCallback): Promise<void> {
-    onProgress?.({
-      phase: 'phase2',
-      loaded: 0,
-      total: 1,
-      message: 'Preparing textbook storage...',
+    // Check if textbooks are already indexed
+    const existingCount = await indexedDBStore.count();
+    if (existingCount > 0) {
+      onProgress?.({
+        phase: 'phase2',
+        loaded: 1,
+        total: 1,
+        message: `Textbooks ready (${existingCount} chapters)`,
+      });
+      const meta = localStorageManager.getMeta();
+      if (meta) {
+        meta.phase2Complete = true;
+        localStorageManager.setMeta(meta);
+      }
+      return;
+    }
+
+    // Download bundled-content.json, verify integrity, index into IndexedDB
+    await indexBundledContent((msg) => {
+      onProgress?.({
+        phase: 'phase2',
+        loaded: 0,
+        total: 1,
+        message: msg,
+      });
     });
 
-    // IndexedDB is initialized on first access (via openDB)
     const count = await indexedDBStore.count();
-
     onProgress?.({
       phase: 'phase2',
       loaded: 1,
       total: 1,
-      message: `Textbook storage ready (${count} chapters cached)`,
+      message: `Textbooks ready (${count} chapters indexed)`,
     });
 
     // Mark phase 2 complete

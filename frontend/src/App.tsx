@@ -13,6 +13,7 @@ import { ProgressPage } from './pages/ProgressPage'
 import { VoicePage } from './pages/VoicePage'
 import { AdminDashboard } from './pages/AdminDashboard'
 import { ExamPage } from './pages/ExamPage'
+import { LibraryPage } from './pages/LibraryPage'
 
 function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -105,6 +106,7 @@ function AuthenticatedApp({
     { path: '/progress', label: 'Progress' },
     { path: '/voice', label: 'Voice' },
     { path: '/exam', label: 'Exam' },
+    { path: '/library', label: 'Library' },
     ...(isAdmin ? [{ path: '/admin', label: 'Admin' }] : []),
   ]
 
@@ -154,6 +156,7 @@ function AuthenticatedApp({
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/voice" element={<VoicePage />} />
           <Route path="/exam" element={<ExamPage />} />
+          <Route path="/library" element={<LibraryPage />} />
           {isAdmin && <Route path="/admin" element={<AdminDashboard />} />}
         </Routes>
       </main>

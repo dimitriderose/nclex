@@ -4,21 +4,10 @@
  */
 
 import type { StaticModule } from '../services/localstorage-manager';
+import { nclexDrugsStatic } from './nclex-drugs';
 
 export const staticData: Record<StaticModule, Record<string, unknown>> = {
-  drugs: {
-    _meta: { name: 'Common NCLEX Drugs', version: 1, count: 50 },
-    metformin: { class: 'Biguanide', use: 'Type 2 DM', monitoring: 'Renal function, B12', contraindications: 'eGFR < 30', side_effects: ['GI upset', 'Lactic acidosis (rare)'], nclex_tip: 'Hold before contrast dye procedures' },
-    lisinopril: { class: 'ACE Inhibitor', use: 'HTN, HF, Diabetic nephropathy', monitoring: 'K+, Renal function, BP', contraindications: 'Pregnancy, Angioedema hx', side_effects: ['Dry cough', 'Hyperkalemia', 'Angioedema'], nclex_tip: 'Dry cough is expected; switch to ARB if intolerable' },
-    warfarin: { class: 'Anticoagulant', use: 'DVT/PE, A-fib, Valve replacement', monitoring: 'INR (target 2-3)', antidote: 'Vitamin K, FFP', interactions: ['Leafy greens (Vit K)', 'Many drug interactions'], nclex_tip: 'Consistent vitamin K diet; INR 2-3 for most; 2.5-3.5 for mechanical valves' },
-    digoxin: { class: 'Cardiac Glycoside', use: 'HF, A-fib', monitoring: 'Dig level (0.8-2 ng/mL), K+, HR', toxicity_signs: ['N/V', 'Visual changes (yellow-green halos)', 'Bradycardia'], nclex_tip: 'Hold if HR < 60; hypokalemia increases toxicity risk' },
-    heparin: { class: 'Anticoagulant', use: 'DVT/PE prevention/treatment', monitoring: 'aPTT (1.5-2.5x control)', antidote: 'Protamine sulfate', nclex_tip: 'Never rub injection site; rotate abdomen sites' },
-    insulin_regular: { class: 'Rapid-acting Insulin', onset: '30-60 min', peak: '2-4 hrs', duration: '6-8 hrs', nclex_tip: 'Only insulin given IV; draw up regular before NPH' },
-    furosemide: { class: 'Loop Diuretic', use: 'HF, Edema, HTN', monitoring: 'K+, Na+, Hearing, BP', side_effects: ['Hypokalemia', 'Ototoxicity', 'Dehydration'], nclex_tip: 'Give in AM to prevent nocturia; monitor K+' },
-    morphine: { class: 'Opioid Analgesic', use: 'Severe pain, MI, Pulmonary edema', monitoring: 'RR, BP, Pain level, Sedation', antidote: 'Naloxone', nclex_tip: 'Hold if RR < 12; have naloxone available' },
-    levothyroxine: { class: 'Thyroid Hormone', use: 'Hypothyroidism', monitoring: 'TSH, T3/T4', administration: 'Empty stomach, AM, 30-60 min before food', nclex_tip: 'Separate from calcium/iron by 4 hours' },
-    potassium_chloride: { class: 'Electrolyte Supplement', use: 'Hypokalemia', max_iv_rate: '10 mEq/hr', monitoring: 'K+ level, ECG, Renal function', nclex_tip: 'NEVER give IV push; dilute and infuse slowly; burns on infusion' },
-  },
+  drugs: nclexDrugsStatic,
 
   labs: {
     _meta: { name: 'Critical Lab Values', version: 1 },

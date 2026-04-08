@@ -65,7 +65,7 @@ export function NGNCaseStudyComponent({ caseStudy, onComplete }: NGNCaseStudyPro
         <div className="case-meta">
           <span className="badge badge-type">NGN Case Study</span>
           <span className="badge badge-ncjmm">{caseStudy.topic}</span>
-          {caseStudy.safetyValidated && <span className="badge badge-validated" title="Safety validated">\u2713 Safe</span>}
+          {caseStudy.safetyValidated && <span className="badge badge-validated" title="Safety validated">{'\u2713'} Safe</span>}
           <span className="case-source">Source: {caseStudy.source}</span>
         </div>
       </div>

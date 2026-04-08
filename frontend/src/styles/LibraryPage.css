@@ -1,0 +1,177 @@
+.library-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.library-header {
+  margin-bottom: 2rem;
+}
+
+.library-header h2 {
+  margin: 0 0 0.5rem;
+}
+
+.library-subtitle {
+  color: #666;
+  margin: 0;
+}
+
+.library-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.library-card {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.library-card-body {
+  flex: 1;
+}
+
+.library-card-title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.library-card-source {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.library-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.library-card-actions .btn {
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.library-card-actions .btn-primary {
+  background: #4361ee;
+  color: #fff;
+  border-color: #4361ee;
+}
+
+.library-card-actions .btn-primary:hover {
+  background: #3a56d4;
+}
+
+.library-card-actions .btn-secondary {
+  background: #fff;
+  color: #333;
+}
+
+.library-card-actions .btn-secondary:hover {
+  background: #f5f5f5;
+}
+
+.library-card-actions .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.library-error {
+  margin-top: 1rem;
+  color: #d32f2f;
+  text-align: center;
+}
+
+/* Content Reader */
+.reader-fullscreen {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.reader-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.reader-title {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-page-info {
+  font-size: 0.85rem;
+  color: #666;
+  white-space: nowrap;
+}
+
+.reader-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  line-height: 1.7;
+  font-size: 1.05rem;
+}
+
+.reader-nav {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-top: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.reader-epub-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+.reader-loading,
+.reader-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 1rem;
+  color: #666;
+}
+
+@media (max-width: 640px) {
+  .library-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .library-card-actions {
+    width: 100%;
+  }
+
+  .library-card-actions .btn {
+    flex: 1;
+    text-align: center;
+  }
+}
