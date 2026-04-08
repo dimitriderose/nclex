@@ -169,7 +169,7 @@ class AdminServiceTest {
             val stats = createStats(userId)
 
             every { userRepository.findById(userId) } returns Optional.of(user)
-            every { userRepository.save(any()) } returnsArg 0
+            every { userRepository.save(any()) } answers { firstArg() }
             every { userStatsRepository.findByUserId(userId) } returns stats
 
             val result = service.updateRole(userId, "ADMIN")
@@ -200,7 +200,7 @@ class AdminServiceTest {
             val user = createUser(id = userId)
 
             every { userRepository.findById(userId) } returns Optional.of(user)
-            every { userRepository.save(any()) } returnsArg 0
+            every { userRepository.save(any()) } answers { firstArg() }
 
             service.softDeleteUser(userId)
 
@@ -362,7 +362,7 @@ class AdminServiceTest {
             )
 
             every { questionReportRepository.findById(reportId) } returns Optional.of(report)
-            every { questionReportRepository.save(any()) } returnsArg 0
+            every { questionReportRepository.save(any()) } answers { firstArg() }
 
             val result = service.updateReport(reportId, "REVIEWED", "Looks correct")
 
