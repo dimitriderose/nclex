@@ -5,6 +5,9 @@ import com.nclex.exception.UnauthorizedException
 import com.nclex.model.ReadingPosition
 import com.nclex.repository.ReadingPositionRepository
 import jakarta.servlet.http.HttpServletRequest
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.http.ResponseEntity
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
@@ -24,9 +27,16 @@ class ReadingPositionController(
 ) {
 
     @GetMapping
-    fun getAll(request: HttpServletRequest): ResponseEntity<List<ReadingPosition>> {
+    fun getAll(
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "50") size: Int,
+        request: HttpServletRequest
+    ): ResponseEntity<Page<ReadingPosition>> {
         val userId = extractUserId(request)
-        return ResponseEntity.ok(readingPositionRepository.findByUserId(userId))
+        val validatedSize = size.coerceIn(1, 100)
+        val validatedPage = page.coerceAtLeast(0)
+        val pageable = PageRequest.of(validatedPage, validatedSize, Sort.by(Sort.Direction.DESC, "updatedAt"))
+        return ResponseEntity.ok(readingPositionRepository.findByUserId(userId, pageable))
     }
 
     @GetMapping("/{contentKey}")

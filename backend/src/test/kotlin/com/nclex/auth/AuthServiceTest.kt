@@ -3,8 +3,10 @@ package com.nclex.auth
 import com.nclex.exception.ConflictException
 import com.nclex.exception.UnauthorizedException
 import com.nclex.exception.ValidationException
+import com.nclex.model.RefreshToken
 import com.nclex.model.User
 import com.nclex.model.UserStats
+import com.nclex.repository.RefreshTokenRepository
 import com.nclex.repository.UserRepository
 import com.nclex.repository.UserStatsRepository
 import io.mockk.*
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import java.time.Instant
 import java.util.UUID
 
 @ExtendWith(MockKExtension::class)
@@ -27,13 +30,17 @@ class AuthServiceTest {
     @MockK
     private lateinit var userStatsRepository: UserStatsRepository
 
+    @MockK
+    private lateinit var refreshTokenRepository: RefreshTokenRepository
+
     private lateinit var authService: AuthService
 
     private val passwordEncoder = BCryptPasswordEncoder(12)
+    private val refreshExpirationMs = 604800000L // 7 days
 
     @BeforeEach
     fun setUp() {
-        authService = AuthService(userRepository, userStatsRepository)
+        authService = AuthService(userRepository, userStatsRepository, refreshTokenRepository, refreshExpirationMs)
     }
 
     // -- register --
@@ -185,5 +192,90 @@ class AuthServiceTest {
             authService.login("test@test.com", "wrongPass1")
         }.isInstanceOf(UnauthorizedException::class.java)
             .hasMessageContaining("Invalid email or password")
+    }
+
+    // -- refresh tokens --
+
+    @Test
+    fun `createRefreshToken - saves and returns token with correct expiry`() {
+        every { refreshTokenRepository.save(any()) } answers { firstArg<RefreshToken>().copy() }
+
+        val userId = UUID.randomUUID()
+        val result = authService.createRefreshToken(userId)
+
+        assertThat(result.userId).isEqualTo(userId)
+        assertThat(result.token).isNotBlank()
+        assertThat(result.expiresAt).isAfter(Instant.now())
+
+        verify(exactly = 1) { refreshTokenRepository.save(any()) }
+    }
+
+    @Test
+    fun `validateAndRotateRefreshToken - valid token rotates successfully`() {
+        val userId = UUID.randomUUID()
+        val existing = RefreshToken(
+            userId = userId,
+            token = "old-token",
+            expiresAt = Instant.now().plusMillis(600000)
+        )
+
+        every { refreshTokenRepository.findByToken("old-token") } returns existing
+        every { refreshTokenRepository.delete(existing) } just Runs
+        every { refreshTokenRepository.save(any()) } answers { firstArg<RefreshToken>().copy() }
+
+        val result = authService.validateAndRotateRefreshToken("old-token")
+
+        assertThat(result.userId).isEqualTo(userId)
+        assertThat(result.token).isNotEqualTo("old-token")
+        verify { refreshTokenRepository.delete(existing) }
+        verify { refreshTokenRepository.save(any()) }
+    }
+
+    @Test
+    fun `validateAndRotateRefreshToken - invalid token throws UnauthorizedException`() {
+        every { refreshTokenRepository.findByToken("bad-token") } returns null
+
+        assertThatThrownBy {
+            authService.validateAndRotateRefreshToken("bad-token")
+        }.isInstanceOf(UnauthorizedException::class.java)
+            .hasMessageContaining("Invalid refresh token")
+    }
+
+    @Test
+    fun `validateAndRotateRefreshToken - expired token throws UnauthorizedException`() {
+        val expired = RefreshToken(
+            userId = UUID.randomUUID(),
+            token = "expired-token",
+            expiresAt = Instant.now().minusMillis(1000)
+        )
+
+        every { refreshTokenRepository.findByToken("expired-token") } returns expired
+        every { refreshTokenRepository.delete(expired) } just Runs
+
+        assertThatThrownBy {
+            authService.validateAndRotateRefreshToken("expired-token")
+        }.isInstanceOf(UnauthorizedException::class.java)
+            .hasMessageContaining("Refresh token expired")
+
+        verify { refreshTokenRepository.delete(expired) }
+    }
+
+    @Test
+    fun `deleteRefreshToken - deletes by token value`() {
+        every { refreshTokenRepository.deleteByToken("some-token") } just Runs
+
+        authService.deleteRefreshToken("some-token")
+
+        verify(exactly = 1) { refreshTokenRepository.deleteByToken("some-token") }
+    }
+
+    @Test
+    fun `deleteAllRefreshTokens - deletes by userId`() {
+        val userId = UUID.randomUUID()
+        every { refreshTokenRepository.deleteByUserId(userId) } just Runs
+
+        authService.deleteAllRefreshTokens(userId)
+
+        verify(exactly = 1) { refreshTokenRepository.deleteByUserId(userId) }
     }
 }

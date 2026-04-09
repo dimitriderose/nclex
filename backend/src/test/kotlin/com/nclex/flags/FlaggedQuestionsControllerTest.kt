@@ -14,6 +14,8 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.Pageable
 import java.util.*
 
 class FlaggedQuestionsControllerTest {
@@ -56,7 +58,7 @@ class FlaggedQuestionsControllerTest {
             every { httpRequest.getAttribute("userId") } returns null
 
             assertThatThrownBy {
-                controller.getFlags(null, null, httpRequest)
+                controller.getFlags(null, null, 0, 50, httpRequest)
             }.isInstanceOf(UnauthorizedException::class.java)
         }
 
@@ -65,7 +67,7 @@ class FlaggedQuestionsControllerTest {
             every { httpRequest.getAttribute("userId") } returns "not-a-uuid"
 
             assertThatThrownBy {
-                controller.getFlags(null, null, httpRequest)
+                controller.getFlags(null, null, 0, 50, httpRequest)
             }.isInstanceOf(UnauthorizedException::class.java)
         }
     }
@@ -79,52 +81,52 @@ class FlaggedQuestionsControllerTest {
         fun `by category filters correctly`() {
             mockAuth()
             val flags = listOf(createFlag(FlagCategory.BOOKMARK))
-            every { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.BOOKMARK) } returns flags
+            every { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.BOOKMARK, any<Pageable>()) } returns PageImpl(flags)
 
-            val result = controller.getFlags(FlagCategory.BOOKMARK, null, httpRequest)
+            val result = controller.getFlags(FlagCategory.BOOKMARK, null, 0, 50, httpRequest)
 
             assertThat(result.statusCode.value()).isEqualTo(200)
-            assertThat(result.body).hasSize(1)
-            verify { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.BOOKMARK) }
+            assertThat(result.body!!.content).hasSize(1)
+            verify { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.BOOKMARK, any<Pageable>()) }
         }
 
         @Test
         fun `by topic filters correctly`() {
             mockAuth()
             val flags = listOf(createFlag(topic = "Cardiology"))
-            every { flaggedQuestionRepository.findByUserIdAndTopic(userId, "Cardiology") } returns flags
+            every { flaggedQuestionRepository.findByUserIdAndTopic(userId, "Cardiology", any<Pageable>()) } returns PageImpl(flags)
 
-            val result = controller.getFlags(null, "Cardiology", httpRequest)
+            val result = controller.getFlags(null, "Cardiology", 0, 50, httpRequest)
 
             assertThat(result.statusCode.value()).isEqualTo(200)
-            assertThat(result.body).hasSize(1)
-            verify { flaggedQuestionRepository.findByUserIdAndTopic(userId, "Cardiology") }
+            assertThat(result.body!!.content).hasSize(1)
+            verify { flaggedQuestionRepository.findByUserIdAndTopic(userId, "Cardiology", any<Pageable>()) }
         }
 
         @Test
         fun `no filter returns all flags`() {
             mockAuth()
             val flags = listOf(createFlag(), createFlag(FlagCategory.HARD))
-            every { flaggedQuestionRepository.findByUserId(userId) } returns flags
+            every { flaggedQuestionRepository.findByUserId(userId, any<Pageable>()) } returns PageImpl(flags)
 
-            val result = controller.getFlags(null, null, httpRequest)
+            val result = controller.getFlags(null, null, 0, 50, httpRequest)
 
             assertThat(result.statusCode.value()).isEqualTo(200)
-            assertThat(result.body).hasSize(2)
-            verify { flaggedQuestionRepository.findByUserId(userId) }
+            assertThat(result.body!!.content).hasSize(2)
+            verify { flaggedQuestionRepository.findByUserId(userId, any<Pageable>()) }
         }
 
         @Test
         fun `category takes precedence over topic when both provided`() {
             mockAuth()
             val flags = listOf(createFlag(FlagCategory.WRONG))
-            every { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.WRONG) } returns flags
+            every { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.WRONG, any<Pageable>()) } returns PageImpl(flags)
 
-            val result = controller.getFlags(FlagCategory.WRONG, "Pharmacology", httpRequest)
+            val result = controller.getFlags(FlagCategory.WRONG, "Pharmacology", 0, 50, httpRequest)
 
-            assertThat(result.body).hasSize(1)
-            verify { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.WRONG) }
-            verify(exactly = 0) { flaggedQuestionRepository.findByUserIdAndTopic(any(), any()) }
+            assertThat(result.body!!.content).hasSize(1)
+            verify { flaggedQuestionRepository.findByUserIdAndCategory(userId, FlagCategory.WRONG, any<Pageable>()) }
+            verify(exactly = 0) { flaggedQuestionRepository.findByUserIdAndTopic(any(), any(), any<Pageable>()) }
         }
     }
 

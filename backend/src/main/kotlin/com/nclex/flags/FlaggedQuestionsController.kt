@@ -9,6 +9,9 @@ import com.nclex.repository.FlaggedQuestionRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.http.ResponseEntity
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
@@ -39,13 +42,18 @@ class FlaggedQuestionsController(
     fun getFlags(
         @RequestParam(required = false) category: FlagCategory?,
         @RequestParam(required = false) topic: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "50") size: Int,
         request: HttpServletRequest
-    ): ResponseEntity<List<FlaggedQuestion>> {
+    ): ResponseEntity<Page<FlaggedQuestion>> {
         val userId = extractUserId(request)
+        val validatedSize = size.coerceIn(1, 100)
+        val validatedPage = page.coerceAtLeast(0)
+        val pageable = PageRequest.of(validatedPage, validatedSize, Sort.by(Sort.Direction.DESC, "createdAt"))
         val flags = when {
-            category != null -> flaggedQuestionRepository.findByUserIdAndCategory(userId, category)
-            topic != null -> flaggedQuestionRepository.findByUserIdAndTopic(userId, topic)
-            else -> flaggedQuestionRepository.findByUserId(userId)
+            category != null -> flaggedQuestionRepository.findByUserIdAndCategory(userId, category, pageable)
+            topic != null -> flaggedQuestionRepository.findByUserIdAndTopic(userId, topic, pageable)
+            else -> flaggedQuestionRepository.findByUserId(userId, pageable)
         }
         return ResponseEntity.ok(flags)
     }
@@ -77,7 +85,7 @@ class FlaggedQuestionsController(
     @Transactional
     fun updateFlag(
         @PathVariable id: UUID,
-        @RequestBody body: UpdateFlagRequest,
+        @Valid @RequestBody body: UpdateFlagRequest,
         request: HttpServletRequest
     ): ResponseEntity<FlaggedQuestion> {
         val userId = extractUserId(request)

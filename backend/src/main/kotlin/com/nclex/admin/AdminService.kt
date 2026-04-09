@@ -1,5 +1,6 @@
 package com.nclex.admin
 
+import com.nclex.exception.NotFoundException
 import com.nclex.model.*
 import com.nclex.repository.*
 import org.slf4j.LoggerFactory
@@ -32,8 +33,12 @@ class AdminService(
             userRepository.searchByEmail(search, pageable)
         }
 
+        val userIds = usersPage.content.map { it.id }
+        val statsMap = userStatsRepository.findByUserIdIn(userIds)
+            .associateBy { it.userId }
+
         val userDtos = usersPage.content.map { user ->
-            val stats = userStatsRepository.findByUserId(user.id)
+            val stats = statsMap[user.id]
             AdminUserDto(
                 id = user.id,
                 email = user.email,
@@ -57,7 +62,7 @@ class AdminService(
 
     fun getUserDetail(userId: UUID): AdminUserDto {
         val user = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User not found: $userId") }
+            .orElseThrow { NotFoundException("User not found: $userId") }
         val stats = userStatsRepository.findByUserId(userId)
         return AdminUserDto(
             id = user.id,
@@ -75,7 +80,7 @@ class AdminService(
     @Transactional
     fun updateRole(userId: UUID, role: String): AdminUserDto {
         val user = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User not found: $userId") }
+            .orElseThrow { NotFoundException("User not found: $userId") }
         user.role = UserRole.valueOf(role.uppercase())
         user.updatedAt = Instant.now()
         // Bump token version so existing tokens are invalidated
@@ -87,7 +92,7 @@ class AdminService(
     @Transactional
     fun softDeleteUser(userId: UUID) {
         val user = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User not found: $userId") }
+            .orElseThrow { NotFoundException("User not found: $userId") }
         user.deletionRequestedAt = Instant.now()
         user.updatedAt = Instant.now()
         user.tokenVersion++
@@ -168,7 +173,7 @@ class AdminService(
     @Transactional
     fun updateReport(reportId: UUID, status: String, reviewNotes: String?): Map<String, Any> {
         val report = questionReportRepository.findById(reportId)
-            .orElseThrow { IllegalArgumentException("Report not found: $reportId") }
+            .orElseThrow { NotFoundException("Report not found: $reportId") }
         report.status = ReportStatus.valueOf(status.uppercase())
         report.reviewNotes = reviewNotes
         report.reviewedAt = Instant.now()

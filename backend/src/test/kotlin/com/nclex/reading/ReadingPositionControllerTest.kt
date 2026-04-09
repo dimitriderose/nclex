@@ -12,6 +12,8 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.Pageable
 import java.util.*
 
 class ReadingPositionControllerTest {
@@ -40,7 +42,7 @@ class ReadingPositionControllerTest {
         every { httpRequest.getAttribute("userId") } returns null
 
         assertThatThrownBy {
-            controller.getAll(httpRequest)
+            controller.getAll(0, 50, httpRequest)
         }.isInstanceOf(UnauthorizedException::class.java)
     }
 
@@ -49,7 +51,7 @@ class ReadingPositionControllerTest {
         every { httpRequest.getAttribute("userId") } returns "string-not-uuid"
 
         assertThatThrownBy {
-            controller.getAll(httpRequest)
+            controller.getAll(0, 50, httpRequest)
         }.isInstanceOf(UnauthorizedException::class.java)
     }
 
@@ -65,23 +67,23 @@ class ReadingPositionControllerTest {
                 ReadingPosition(userId = userId, contentKey = "ch1", position = mapOf("page" to 5)),
                 ReadingPosition(userId = userId, contentKey = "ch2", position = mapOf("page" to 10))
             )
-            every { repository.findByUserId(userId) } returns positions
+            every { repository.findByUserId(userId, any<Pageable>()) } returns PageImpl(positions)
 
-            val result = controller.getAll(httpRequest)
+            val result = controller.getAll(0, 50, httpRequest)
 
             assertThat(result.statusCode.value()).isEqualTo(200)
-            assertThat(result.body).hasSize(2)
+            assertThat(result.body!!.content).hasSize(2)
         }
 
         @Test
         fun `returns empty list when no positions`() {
             mockAuth()
-            every { repository.findByUserId(userId) } returns emptyList()
+            every { repository.findByUserId(userId, any<Pageable>()) } returns PageImpl(emptyList())
 
-            val result = controller.getAll(httpRequest)
+            val result = controller.getAll(0, 50, httpRequest)
 
             assertThat(result.statusCode.value()).isEqualTo(200)
-            assertThat(result.body).isEmpty()
+            assertThat(result.body!!.content).isEmpty()
         }
     }
 

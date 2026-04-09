@@ -650,25 +650,25 @@ class ExamSimulationServiceTest {
     inner class GetSessionForUser {
 
         @Test
-        fun `session not found throws IllegalArgumentException`() {
+        fun `session not found throws NotFoundException`() {
             val sessionId = UUID.randomUUID()
             every { examSessionRepository.findById(sessionId) } returns Optional.empty()
 
             assertThatThrownBy {
                 service.getExamState(userId, sessionId)
-            }.isInstanceOf(IllegalArgumentException::class.java)
+            }.isInstanceOf(com.nclex.exception.NotFoundException::class.java)
                 .hasMessageContaining("not found")
         }
 
         @Test
-        fun `wrong user throws IllegalArgumentException`() {
+        fun `wrong user throws ForbiddenException`() {
             val otherUserId = UUID.randomUUID()
             val session = ExamSession(userId = otherUserId, status = ExamStatus.IN_PROGRESS)
             every { examSessionRepository.findById(session.id) } returns Optional.of(session)
 
             assertThatThrownBy {
                 service.getExamState(userId, session.id)
-            }.isInstanceOf(IllegalArgumentException::class.java)
+            }.isInstanceOf(com.nclex.exception.ForbiddenException::class.java)
                 .hasMessageContaining("does not belong")
         }
     }

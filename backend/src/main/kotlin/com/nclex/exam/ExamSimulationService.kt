@@ -5,6 +5,8 @@ import com.nclex.model.ExamStatus
 import com.nclex.repository.ExamSessionRepository
 import com.nclex.repository.UserStatsRepository
 import com.nclex.audit.AuditLogger
+import com.nclex.exception.ForbiddenException
+import com.nclex.exception.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -277,11 +279,14 @@ class ExamSimulationService(
 
         // Rule 1: Max questions reached
         if (totalAnswered >= MAX_QUESTIONS) {
-            return session.currentDifficulty >= 0.5
+            val result = session.currentDifficulty >= 0.5
+            logger.debug("CAT: max questions reached ({}), difficulty={}, pass={}", totalAnswered, session.currentDifficulty, result)
+            return result
         }
 
         // Rule 2: Minimum not yet reached
         if (totalAnswered < MIN_QUESTIONS) {
+            logger.debug("CAT: below minimum ({}/{}), continuing", totalAnswered, MIN_QUESTIONS)
             return null // continue
         }
 
@@ -291,11 +296,22 @@ class ExamSimulationService(
         val lowerBound = abilityEstimate - 1.96 * standardError
         val upperBound = abilityEstimate + 1.96 * standardError
 
-        // If entire CI is above passing standard → pass
-        if (lowerBound > PASSING_STANDARD) return true
-        // If entire CI is below passing standard → fail
-        if (upperBound < PASSING_STANDARD) return false
+        logger.debug("CAT: q={} ability={} SE={} CI=[{}, {}] passing={}",
+            totalAnswered, String.format("%.3f", abilityEstimate), String.format("%.3f", standardError),
+            String.format("%.3f", lowerBound), String.format("%.3f", upperBound), PASSING_STANDARD)
 
+        // If entire CI is above passing standard → pass
+        if (lowerBound > PASSING_STANDARD) {
+            logger.debug("CAT: lower bound {} > passing standard {}, PASS", String.format("%.3f", lowerBound), PASSING_STANDARD)
+            return true
+        }
+        // If entire CI is below passing standard → fail
+        if (upperBound < PASSING_STANDARD) {
+            logger.debug("CAT: upper bound {} < passing standard {}, FAIL", String.format("%.3f", upperBound), PASSING_STANDARD)
+            return false
+        }
+
+        logger.debug("CAT: CI straddles passing standard, continuing")
         return null // continue testing
     }
 
@@ -445,8 +461,8 @@ class ExamSimulationService(
 
     private fun getSessionForUser(userId: UUID, sessionId: UUID): ExamSession {
         val session = examSessionRepository.findById(sessionId)
-            .orElseThrow { IllegalArgumentException("Exam session not found: $sessionId") }
-        require(session.userId == userId) { "Exam session does not belong to user" }
+            .orElseThrow { NotFoundException("Exam session not found: $sessionId") }
+        if (session.userId != userId) throw ForbiddenException("Exam session does not belong to user")
         return session
     }
 

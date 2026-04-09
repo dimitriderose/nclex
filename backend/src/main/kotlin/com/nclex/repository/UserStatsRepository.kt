@@ -10,6 +10,8 @@ import java.util.UUID
 interface UserStatsRepository : JpaRepository<UserStats, UUID> {
     fun findByUserId(userId: UUID): UserStats?
 
+    fun findByUserIdIn(userIds: List<UUID>): List<UserStats>
+
     fun countByLastActiveAtAfter(after: Instant): Long
 
     @Query("SELECT AVG(us.readinessScore) FROM UserStats us WHERE us.readinessScore > 0")

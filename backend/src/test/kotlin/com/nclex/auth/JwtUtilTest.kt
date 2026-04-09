@@ -17,12 +17,13 @@ class JwtUtilTest {
     // 64-byte secret for HS512 (minimum 512 bits)
     private val secret = "a]b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6A7B8C9D0E1F2"
     private val expirationMs = 3600000L // 1 hour
+    private val refreshExpirationMs = 604800000L // 7 days
 
     private lateinit var jwtUtil: JwtUtil
 
     @BeforeEach
     fun setUp() {
-        jwtUtil = JwtUtil(secret, expirationMs)
+        jwtUtil = JwtUtil(secret, expirationMs, refreshExpirationMs)
     }
 
     // -- createToken --
@@ -90,7 +91,7 @@ class JwtUtilTest {
     @Test
     fun `expired token returns null`() {
         // Create JwtUtil with 0ms expiration so token is immediately expired
-        val shortLivedJwt = JwtUtil(secret, 0L)
+        val shortLivedJwt = JwtUtil(secret, 0L, refreshExpirationMs)
         val token = shortLivedJwt.createToken(UUID.randomUUID(), "a@b.com", "USER", 0)
 
         // Small delay to ensure expiry
@@ -120,7 +121,7 @@ class JwtUtilTest {
     @Test
     fun `token signed with different key returns null`() {
         val otherSecret = "Z9Y8X7W6V5U4T3S2R1Q0P9O8N7M6L5K4J3I2H1G0F9E8D7C6B5A4z3y2x1w0v9u8"
-        val otherJwt = JwtUtil(otherSecret, expirationMs)
+        val otherJwt = JwtUtil(otherSecret, expirationMs, refreshExpirationMs)
         val token = otherJwt.createToken(UUID.randomUUID(), "a@b.com", "USER", 0)
 
         val claims = jwtUtil.validateToken(token)
@@ -143,7 +144,7 @@ class JwtUtilTest {
         assertThat(cookie).contains("HttpOnly")
         assertThat(cookie).contains("Secure")
         assertThat(cookie).contains("Path=/")
-        assertThat(cookie).contains("SameSite=Lax")
+        assertThat(cookie).contains("SameSite=Strict")
         // maxAge should be expirationMs / 1000 = 3600
         assertThat(cookie).contains("Max-Age=3600")
     }
@@ -165,7 +166,7 @@ class JwtUtilTest {
         assertThat(cookie).contains("HttpOnly")
         assertThat(cookie).contains("Secure")
         assertThat(cookie).contains("Path=/")
-        assertThat(cookie).contains("SameSite=Lax")
+        assertThat(cookie).contains("SameSite=Strict")
     }
 
     // -- COOKIE_NAME constant --
@@ -173,5 +174,56 @@ class JwtUtilTest {
     @Test
     fun `COOKIE_NAME is nclex_token`() {
         assertThat(JwtUtil.COOKIE_NAME).isEqualTo("nclex_token")
+    }
+
+    @Test
+    fun `REFRESH_COOKIE_NAME is nclex_refresh`() {
+        assertThat(JwtUtil.REFRESH_COOKIE_NAME).isEqualTo("nclex_refresh")
+    }
+
+    // -- addRefreshCookie --
+
+    @Test
+    fun `addRefreshCookie sets correct cookie header`() {
+        val response = mockk<HttpServletResponse>()
+        val headerSlot = slot<String>()
+        every { response.addHeader("Set-Cookie", capture(headerSlot)) } returns Unit
+
+        jwtUtil.addRefreshCookie(response, "my-refresh-token")
+
+        verify { response.addHeader("Set-Cookie", any()) }
+        val cookie = headerSlot.captured
+        assertThat(cookie).contains("nclex_refresh=my-refresh-token")
+        assertThat(cookie).contains("HttpOnly")
+        assertThat(cookie).contains("Secure")
+        assertThat(cookie).contains("Path=/api/auth")
+        // maxAge should be refreshExpirationMs / 1000 = 604800
+        assertThat(cookie).contains("Max-Age=604800")
+    }
+
+    // -- clearRefreshCookie --
+
+    @Test
+    fun `clearRefreshCookie sets expired cookie`() {
+        val response = mockk<HttpServletResponse>()
+        val headerSlot = slot<String>()
+        every { response.addHeader("Set-Cookie", capture(headerSlot)) } returns Unit
+
+        jwtUtil.clearRefreshCookie(response)
+
+        verify { response.addHeader("Set-Cookie", any()) }
+        val cookie = headerSlot.captured
+        assertThat(cookie).contains("nclex_refresh=")
+        assertThat(cookie).contains("Max-Age=0")
+        assertThat(cookie).contains("HttpOnly")
+        assertThat(cookie).contains("Secure")
+        assertThat(cookie).contains("Path=/api/auth")
+    }
+
+    // -- getRefreshExpirationMs --
+
+    @Test
+    fun `getRefreshExpirationMs returns configured value`() {
+        assertThat(jwtUtil.getRefreshExpirationMs()).isEqualTo(604800000L)
     }
 }

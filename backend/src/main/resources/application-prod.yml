@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+logging:
+  level:
+    root: WARN
+    com.nclex: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN

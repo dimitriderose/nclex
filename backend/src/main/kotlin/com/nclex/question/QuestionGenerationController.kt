@@ -3,6 +3,9 @@ package com.nclex.question
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.Size
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -48,7 +51,7 @@ class QuestionGenerationController(
 
     @PostMapping("/validate")
     fun validateQuestion(
-        @RequestBody body: ValidateRequest,
+        @Valid @RequestBody body: ValidateRequest,
         request: HttpServletRequest
     ): ResponseEntity<ValidationResult> {
         val result = questionGenerationService.validateNCJMMTag(
@@ -69,15 +72,21 @@ data class GenerateRequest(
 )
 
 data class BatchGenerateRequest(
+    @field:Size(min = 1, message = "At least one topic is required")
     val topics: List<String>,
+    @field:Min(1, message = "count must be >= 1")
+    @field:Max(20, message = "count must be <= 20")
     val count: Int = 5,
     val questionTypes: List<String> = listOf("mc"),
     val difficulty: String? = "medium"
 )
 
 data class ValidateRequest(
+    @field:NotBlank(message = "questionStem is required")
     val questionStem: String,
+    @field:NotBlank(message = "assignedStep is required")
     val assignedStep: String,
+    @field:NotBlank(message = "rationale is required")
     val rationale: String
 )
 

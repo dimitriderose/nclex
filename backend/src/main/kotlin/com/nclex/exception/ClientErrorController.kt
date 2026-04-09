@@ -1,6 +1,7 @@
 package com.nclex.exception
 
 import com.nclex.audit.AuditLogger
+import com.nclex.config.resolveClientIp
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -23,7 +24,7 @@ class ClientErrorController(private val auditLogger: AuditLogger) {
         auditLogger.log(
             eventType = "CLIENT_ERROR",
             userId = request.getAttribute("userId") as? UUID,
-            ipAddress = request.remoteAddr,
+            ipAddress = resolveClientIp(request),
             metadata = mapOf(
                 "errorMessage" to report.message,
                 "componentStack" to (report.componentStack ?: ""),

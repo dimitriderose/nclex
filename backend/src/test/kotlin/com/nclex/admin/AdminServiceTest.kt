@@ -1,5 +1,6 @@
 package com.nclex.admin
 
+import com.nclex.exception.NotFoundException
 import com.nclex.model.*
 import com.nclex.repository.*
 import io.mockk.*
@@ -69,7 +70,7 @@ class AdminServiceTest {
             val page = PageImpl(listOf(user), PageRequest.of(0, 25), 1)
 
             every { userRepository.findAll(any<Pageable>()) } returns page
-            every { userStatsRepository.findByUserId(user.id) } returns stats
+            every { userStatsRepository.findByUserIdIn(listOf(user.id)) } returns listOf(stats)
 
             val result = service.listUsers(null, 0, 25)
 
@@ -88,7 +89,7 @@ class AdminServiceTest {
             val page = PageImpl(listOf(user), PageRequest.of(0, 25), 1)
 
             every { userRepository.searchByEmail("admin", any()) } returns page
-            every { userStatsRepository.findByUserId(user.id) } returns null
+            every { userStatsRepository.findByUserIdIn(listOf(user.id)) } returns emptyList()
 
             val result = service.listUsers("admin", 0, 25)
 
@@ -107,7 +108,7 @@ class AdminServiceTest {
             val page = PageImpl(listOf(user), PageRequest.of(0, 25), 1)
 
             every { userRepository.findAll(any<Pageable>()) } returns page
-            every { userStatsRepository.findByUserId(user.id) } returns null
+            every { userStatsRepository.findByUserIdIn(listOf(user.id)) } returns emptyList()
 
             val result = service.listUsers(null, 0, 25)
 
@@ -121,6 +122,7 @@ class AdminServiceTest {
         fun `blank search treated as no search`() {
             val page = PageImpl(emptyList<User>(), PageRequest.of(0, 25), 0)
             every { userRepository.findAll(any<Pageable>()) } returns page
+            every { userStatsRepository.findByUserIdIn(emptyList()) } returns emptyList()
 
             service.listUsers("  ", 0, 25)
             verify { userRepository.findAll(any<Pageable>()) }
@@ -147,12 +149,12 @@ class AdminServiceTest {
         }
 
         @Test
-        fun `not found throws IllegalArgumentException`() {
+        fun `not found throws NotFoundException`() {
             val userId = UUID.randomUUID()
             every { userRepository.findById(userId) } returns Optional.empty()
 
             assertThatThrownBy { service.getUserDetail(userId) }
-                .isInstanceOf(IllegalArgumentException::class.java)
+                .isInstanceOf(NotFoundException::class.java)
                 .hasMessageContaining("User not found")
         }
     }
@@ -180,12 +182,12 @@ class AdminServiceTest {
         }
 
         @Test
-        fun `not found throws IllegalArgumentException`() {
+        fun `not found throws NotFoundException`() {
             val userId = UUID.randomUUID()
             every { userRepository.findById(userId) } returns Optional.empty()
 
             assertThatThrownBy { service.updateRole(userId, "ADMIN") }
-                .isInstanceOf(IllegalArgumentException::class.java)
+                .isInstanceOf(NotFoundException::class.java)
         }
     }
 
@@ -210,12 +212,12 @@ class AdminServiceTest {
         }
 
         @Test
-        fun `not found throws IllegalArgumentException`() {
+        fun `not found throws NotFoundException`() {
             val userId = UUID.randomUUID()
             every { userRepository.findById(userId) } returns Optional.empty()
 
             assertThatThrownBy { service.softDeleteUser(userId) }
-                .isInstanceOf(IllegalArgumentException::class.java)
+                .isInstanceOf(NotFoundException::class.java)
         }
     }
 
@@ -448,12 +450,12 @@ class AdminServiceTest {
         }
 
         @Test
-        fun `not found throws IllegalArgumentException`() {
+        fun `not found throws NotFoundException`() {
             val reportId = UUID.randomUUID()
             every { questionReportRepository.findById(reportId) } returns Optional.empty()
 
             assertThatThrownBy { service.updateReport(reportId, "REVIEWED", null) }
-                .isInstanceOf(IllegalArgumentException::class.java)
+                .isInstanceOf(NotFoundException::class.java)
                 .hasMessageContaining("Report not found")
         }
     }

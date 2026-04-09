@@ -37,7 +37,7 @@ class SecurityConfigTest {
         assertThat(corsConfig.allowedOrigins).containsExactly("http://localhost:3000", "http://localhost:5173")
         assertThat(corsConfig.allowCredentials).isTrue()
         assertThat(corsConfig.allowedMethods).containsAll(listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"))
-        assertThat(corsConfig.allowedHeaders).contains("*")
+        assertThat(corsConfig.allowedHeaders).containsExactlyInAnyOrder("Content-Type", "Authorization", "X-Requested-With")
         assertThat(corsConfig.maxAge).isEqualTo(3600)
     }
 
