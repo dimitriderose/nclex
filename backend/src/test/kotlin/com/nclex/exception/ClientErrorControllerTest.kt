@@ -21,6 +21,7 @@ class ClientErrorControllerTest {
     fun setUp() {
         controller = ClientErrorController(auditLogger)
         every { auditLogger.log(any(), any(), any(), any(), any()) } returns AuditLog(eventType = "test")
+        every { httpRequest.getHeader("X-Forwarded-For") } returns null
     }
 
     // ── reportClientError ──────────────────────────────────────────

@@ -2,7 +2,10 @@ package com.nclex.auth
 
 import com.nclex.audit.AuditLogger
 import com.nclex.config.RateLimitService
+import com.nclex.config.resolveClientIp
 import com.nclex.exception.RateLimitException
+import com.nclex.exception.UnauthorizedException
+import com.nclex.repository.UserRepository
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
@@ -10,6 +13,7 @@ import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.Size
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.util.UUID
 
 data class RegisterRequest(
     @field:Email(message = "Invalid email format")
@@ -35,7 +39,8 @@ class AuthController(
     private val authService: AuthService,
     private val jwtUtil: JwtUtil,
     private val rateLimitService: RateLimitService,
-    private val auditLogger: AuditLogger
+    private val auditLogger: AuditLogger,
+    private val userRepository: UserRepository
 ) {
 
     @PostMapping("/register")
@@ -44,7 +49,7 @@ class AuthController(
         httpRequest: HttpServletRequest,
         response: HttpServletResponse
     ): ResponseEntity<AuthResponse> {
-        val clientIp = httpRequest.remoteAddr
+        val clientIp = resolveClientIp(httpRequest)
         if (!rateLimitService.tryConsumeRegister(clientIp)) {
             throw RateLimitException("Registration rate limit exceeded. Try again later.")
         }
@@ -52,6 +57,9 @@ class AuthController(
         val user = authService.register(request.email, request.password)
         val token = jwtUtil.createToken(user.id, user.email, user.role.name, user.tokenVersion)
         jwtUtil.addTokenCookie(response, token)
+
+        val refreshToken = authService.createRefreshToken(user.id)
+        jwtUtil.addRefreshCookie(response, refreshToken.token)
 
         auditLogger.log("USER_REGISTERED", user.id, metadata = mapOf("email" to user.email), ipAddress = clientIp)
 
@@ -64,7 +72,7 @@ class AuthController(
         httpRequest: HttpServletRequest,
         response: HttpServletResponse
     ): ResponseEntity<AuthResponse> {
-        val clientIp = httpRequest.remoteAddr
+        val clientIp = resolveClientIp(httpRequest)
         if (!rateLimitService.tryConsumeLogin(clientIp)) {
             throw RateLimitException("Login rate limit exceeded. Try again later.")
         }
@@ -73,15 +81,48 @@ class AuthController(
         val token = jwtUtil.createToken(user.id, user.email, user.role.name, user.tokenVersion)
         jwtUtil.addTokenCookie(response, token)
 
+        val refreshToken = authService.createRefreshToken(user.id)
+        jwtUtil.addRefreshCookie(response, refreshToken.token)
+
         auditLogger.log("USER_LOGIN", user.id, metadata = mapOf("email" to user.email), ipAddress = clientIp)
 
         return ResponseEntity.ok(AuthResponse("Login successful", user.email))
     }
 
     @PostMapping("/logout")
-    fun logout(response: HttpServletResponse): ResponseEntity<AuthResponse> {
+    fun logout(
+        httpRequest: HttpServletRequest,
+        response: HttpServletResponse
+    ): ResponseEntity<AuthResponse> {
+        // Delete refresh token from DB if present
+        val refreshCookie = httpRequest.cookies?.find { it.name == JwtUtil.REFRESH_COOKIE_NAME }
+        if (refreshCookie != null) {
+            authService.deleteRefreshToken(refreshCookie.value)
+        }
+
         jwtUtil.clearTokenCookie(response)
+        jwtUtil.clearRefreshCookie(response)
         return ResponseEntity.ok(AuthResponse("Logged out successfully"))
+    }
+
+    @PostMapping("/refresh")
+    fun refresh(
+        httpRequest: HttpServletRequest,
+        response: HttpServletResponse
+    ): ResponseEntity<AuthResponse> {
+        val refreshCookie = httpRequest.cookies?.find { it.name == JwtUtil.REFRESH_COOKIE_NAME }
+            ?: throw UnauthorizedException("No refresh token provided")
+
+        val newRefreshToken = authService.validateAndRotateRefreshToken(refreshCookie.value)
+
+        val user = userRepository.findById(newRefreshToken.userId)
+            .orElseThrow { UnauthorizedException("User not found") }
+
+        val accessToken = jwtUtil.createToken(user.id, user.email, user.role.name, user.tokenVersion)
+        jwtUtil.addTokenCookie(response, accessToken)
+        jwtUtil.addRefreshCookie(response, newRefreshToken.token)
+
+        return ResponseEntity.ok(AuthResponse("Token refreshed", user.email))
     }
 
     @GetMapping("/me")

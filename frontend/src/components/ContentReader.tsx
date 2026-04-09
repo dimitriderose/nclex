@@ -10,9 +10,10 @@ import { useReaderPreferences } from '../hooks/useReaderPreferences'
 import { useAudioReader } from '../hooks/useAudioReader'
 import { useHighlights, resolveXPath, type Highlight } from '../hooks/useHighlights'
 import { useBookmarks } from '../hooks/useBookmarks'
-import { parseEpub } from '../reader/epubParser'
+import { useEPUBLoader } from '../hooks/useEPUBLoader'
+import { useReaderNavigation } from '../hooks/useReaderNavigation'
+import { useReadingPosition } from '../hooks/useReadingPosition'
 import { readerLog } from '../reader/readerLogger'
-import { api } from '../services/api'
 import { ReaderToolbar } from './reader/ReaderToolbar'
 import { FlipbookContainer } from './reader/FlipbookContainer'
 import { BottomBar } from './reader/BottomBar'
@@ -31,33 +32,12 @@ interface ContentReaderProps {
   onClose: () => void
 }
 
-const WORDS_PER_MINUTE = 238
-const POSITION_SAVE_DEBOUNCE_MS = 1500
-
-function estimateReadingTime(text: string): string {
-  const wordCount = text.trim().split(/\s+/).filter(Boolean).length
-  const minutes = Math.ceil(wordCount / WORDS_PER_MINUTE)
-  if (minutes < 1) return '~1 min read'
-  return `~${minutes} min read`
-}
-
-function stripHtmlTags(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ')
-}
-
 export function ContentReader({
   epubUrl,
   bookTitle,
   contentKey,
   onClose,
 }: ContentReaderProps) {
-  const [html, setHtml] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [readingTime, setReadingTime] = useState<string | undefined>(undefined)
-  const [retryCount, setRetryCount] = useState(0)
-  const [positionRestored, setPositionRestored] = useState(false)
-
   // Sidebar toggles
   const [highlightsSidebarOpen, setHighlightsSidebarOpen] = useState(false)
   const [bookmarksSidebarOpen, setBookmarksSidebarOpen] = useState(false)
@@ -68,8 +48,9 @@ export function ContentReader({
 
   const viewportRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const touchStartX = useRef(0)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // --- Extracted hooks ---
+  const { html, loading, error, readingTime, handleRetry } = useEPUBLoader(epubUrl, contentKey)
 
   const prefs = useReaderPreferences()
   const audio = useAudioReader()
@@ -84,6 +65,13 @@ export function ContentReader({
     paginate,
     progressPercent,
   } = flipbook
+
+  const { handleTouchStart, handleTouchEnd } = useReaderNavigation({
+    flipNext,
+    flipPrev,
+    flipTo,
+    totalPages,
+  })
 
   // Hooks for highlights and bookmarks
   const {
@@ -101,53 +89,6 @@ export function ContentReader({
     removeBookmark,
   } = useBookmarks(contentKey)
 
-  // --- Fetch and parse EPUB ---
-  const loadEpub = useCallback(
-    async (signal: AbortSignal) => {
-      setLoading(true)
-      setError(null)
-
-      try {
-        const response = await fetch(epubUrl, { signal })
-        if (!response.ok) {
-          readerLog.error('book.fetch_failed', new Error('HTTP ' + response.status), { epubUrl })
-          throw new Error(`Failed to fetch EPUB (${response.status})`)
-        }
-        const contentLength = parseInt(response.headers.get('content-length') || '0')
-        if (contentLength > 200 * 1024 * 1024) {
-          readerLog.error('book.too_large', new Error('File too large'), { contentLength })
-          throw new Error('This book is too large to open (max 200 MB)')
-        }
-        const buffer = await response.arrayBuffer()
-        if (buffer.byteLength > 200 * 1024 * 1024) {
-          readerLog.error('book.too_large', new Error('File too large'), { size: buffer.byteLength })
-          throw new Error('This book is too large to open (max 200 MB)')
-        }
-        const result = await parseEpub(buffer)
-        if (signal.aborted) return
-
-        setHtml(result.html)
-        readerLog.info('book.opened', { contentKey, title: result.title })
-        setReadingTime(estimateReadingTime(stripHtmlTags(result.html)))
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return
-        const message =
-          err instanceof Error ? err.message : 'Unknown error loading book'
-        readerLog.error('book.load_failed', err, { epubUrl, contentKey })
-        setError(message)
-      } finally {
-        if (!signal.aborted) setLoading(false)
-      }
-    },
-    [epubUrl, contentKey],
-  )
-
-  useEffect(() => {
-    const controller = new AbortController()
-    loadEpub(controller.signal)
-    return () => controller.abort()
-  }, [loadEpub, retryCount])
-
   // --- Paginate after content is rendered ---
   useLayoutEffect(() => {
     if (html && !loading && !error) {
@@ -162,68 +103,8 @@ export function ContentReader({
     }
   }, [html, loading, error, paginate, prefs.fontSize, prefs.lineHeight, prefs.margins, renderHighlights])
 
-  // --- Restore reading position from API ---
-  useEffect(() => {
-    if (totalPages <= 0 || positionRestored) return
-
-    let cancelled = false
-    api
-      .getReadingPosition(contentKey)
-      .then((pos) => {
-        if (cancelled || !pos) return
-        const saved = pos.position as { page?: number }
-        if (typeof saved?.page === 'number' && saved.page >= 0) {
-          flipTo(saved.page)
-          readerLog.info('reading_position.restored', {
-            contentKey,
-            page: saved.page,
-          })
-        }
-      })
-      .catch((err) => {
-        readerLog.error('reading_position.restore_failed', err, { contentKey })
-      })
-      .finally(() => {
-        if (!cancelled) setPositionRestored(true)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [contentKey, totalPages, positionRestored, flipTo])
-
-  // --- Auto-save position with debounce ---
-  useEffect(() => {
-    if (!positionRestored || totalPages <= 0) return
-
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current)
-    }
-
-    saveTimerRef.current = setTimeout(() => {
-      api
-        .setReadingPosition(contentKey, { page: currentPage, totalPages })
-        .then(() => {
-          readerLog.debug('reading_position.saved', {
-            contentKey,
-            page: currentPage,
-            totalPages,
-          })
-        })
-        .catch((err) => {
-          readerLog.error('reading_position.save_failed', err, {
-            contentKey,
-            page: currentPage,
-          })
-        })
-    }, POSITION_SAVE_DEBOUNCE_MS)
-
-    return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current)
-      }
-    }
-  }, [currentPage, totalPages, contentKey, positionRestored])
+  // --- Reading position restore + auto-save ---
+  useReadingPosition({ contentKey, currentPage, totalPages, flipTo })
 
   // --- Text selection handling for highlight popup ---
   useEffect(() => {
@@ -291,73 +172,6 @@ export function ContentReader({
   const handlePopupClose = useCallback(() => {
     setPopupPosition(null)
     pendingRangeRef.current = null
-  }, [])
-
-  // --- Keyboard navigation ---
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'SELECT' ||
-        target.tagName === 'BUTTON'
-      ) {
-        return
-      }
-
-      switch (e.key) {
-        case 'ArrowRight':
-        case 'PageDown':
-        case ' ':
-          e.preventDefault()
-          flipNext()
-          break
-        case 'ArrowLeft':
-        case 'PageUp':
-          e.preventDefault()
-          flipPrev()
-          break
-        case 'Home':
-          e.preventDefault()
-          flipTo(0)
-          break
-        case 'End':
-          e.preventDefault()
-          flipTo(totalPages - 1)
-          break
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [flipNext, flipPrev, flipTo, totalPages])
-
-  // --- Touch navigation ---
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX
-  }, [])
-
-  const handleTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      const sel = window.getSelection()
-      if (sel && sel.toString().trim()) return  // user is selecting text, don't flip
-      const deltaX = e.changedTouches[0].clientX - touchStartX.current
-      if (deltaX > 40) {
-        flipPrev()
-      } else if (deltaX < -40) {
-        flipNext()
-      }
-    },
-    [flipNext, flipPrev],
-  )
-
-  // --- Retry handler ---
-  const handleRetry = useCallback(() => {
-    setRetryCount((c) => {
-      readerLog.info('book.retry', { retryCount: c + 1 })
-      return c + 1
-    })
   }, [])
 
   // --- Bookmark toggle for current page ---

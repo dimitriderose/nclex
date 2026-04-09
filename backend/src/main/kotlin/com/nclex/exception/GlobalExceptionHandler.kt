@@ -1,6 +1,7 @@
 package com.nclex.exception
 
 import com.nclex.audit.AuditLogger
+import com.nclex.config.resolveClientIp
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -42,7 +43,7 @@ class GlobalExceptionHandler(
         auditLogger.log(
             eventType = eventType,
             userId = request.getAttribute("userId") as? UUID,
-            ipAddress = request.remoteAddr,
+            ipAddress = resolveClientIp(request),
             metadata = mapOf(
                 "errorType" to (ex::class.simpleName ?: "Unknown"),
                 "message" to ex.message,
@@ -88,7 +89,7 @@ class GlobalExceptionHandler(
         auditLogger.log(
             eventType = "ERROR",
             userId = request.getAttribute("userId") as? UUID,
-            ipAddress = request.remoteAddr,
+            ipAddress = resolveClientIp(request),
             metadata = mapOf(
                 "errorType" to (ex::class.simpleName ?: "Unknown"),
                 "message" to (ex.message ?: "No message"),

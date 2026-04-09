@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import org.slf4j.LoggerFactory
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.reactive.function.client.bodyToMono
 import java.util.UUID
@@ -40,6 +41,8 @@ class ClaudeProxyController(
     @Value("\${nclex.claude.model}") private val model: String,
     @Value("\${nclex.claude.max-tokens}") private val maxTokens: Int
 ) {
+
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     private val webClient = WebClient.builder()
         .baseUrl(apiUrl)
@@ -89,7 +92,8 @@ class ClaudeProxyController(
         } catch (e: ExternalServiceException) {
             throw e
         } catch (e: Exception) {
-            throw ExternalServiceException("Failed to communicate with Claude API: ${e.message}")
+            logger.error("Claude API communication failed", e)
+            throw ExternalServiceException("Failed to communicate with Claude API")
         }
 
         auditLogger.log(

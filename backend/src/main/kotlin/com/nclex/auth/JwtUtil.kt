@@ -13,12 +13,16 @@ import javax.crypto.SecretKey
 @Component
 class JwtUtil(
     @Value("\${nclex.jwt.secret}") private val secret: String,
-    @Value("\${nclex.jwt.expiration-ms}") private val expirationMs: Long
+    @Value("\${nclex.jwt.expiration-ms}") private val expirationMs: Long,
+    @Value("\${nclex.jwt.refresh-expiration-ms}") private val refreshExpirationMs: Long
 ) {
 
     companion object {
         const val COOKIE_NAME = "nclex_token"
+        const val REFRESH_COOKIE_NAME = "nclex_refresh"
     }
+
+    fun getRefreshExpirationMs(): Long = refreshExpirationMs
 
     private val key: SecretKey by lazy {
         Keys.hmacShaKeyFor(secret.toByteArray())
@@ -55,7 +59,7 @@ class JwtUtil(
             .secure(true)
             .path("/")
             .maxAge(expirationMs / 1000)
-            .sameSite("Lax")
+            .sameSite("Strict")
             .build()
         response.addHeader("Set-Cookie", cookie.toString())
     }
@@ -66,7 +70,29 @@ class JwtUtil(
             .secure(true)
             .path("/")
             .maxAge(0)
-            .sameSite("Lax")
+            .sameSite("Strict")
+            .build()
+        response.addHeader("Set-Cookie", cookie.toString())
+    }
+
+    fun addRefreshCookie(response: HttpServletResponse, token: String) {
+        val cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, token)
+            .httpOnly(true)
+            .secure(true)
+            .path("/api/auth")
+            .maxAge(refreshExpirationMs / 1000)
+            .sameSite("Strict")
+            .build()
+        response.addHeader("Set-Cookie", cookie.toString())
+    }
+
+    fun clearRefreshCookie(response: HttpServletResponse) {
+        val cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
+            .httpOnly(true)
+            .secure(true)
+            .path("/api/auth")
+            .maxAge(0)
+            .sameSite("Strict")
             .build()
         response.addHeader("Set-Cookie", cookie.toString())
     }

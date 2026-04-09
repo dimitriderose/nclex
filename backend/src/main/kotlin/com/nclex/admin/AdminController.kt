@@ -1,6 +1,9 @@
 package com.nclex.admin
 
 import com.nclex.audit.AuditLogger
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -22,7 +25,7 @@ class AdminController(
 
     @GetMapping("/users")
     fun listUsers(
-        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) @Size(max = 100, message = "Search must be at most 100 characters") search: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "25") size: Int
     ): ResponseEntity<Map<String, Any>> {
@@ -39,7 +42,7 @@ class AdminController(
     @PatchMapping("/users/{userId}/role")
     fun updateUserRole(
         @PathVariable userId: UUID,
-        @RequestBody body: RoleUpdateRequest,
+        @Valid @RequestBody body: RoleUpdateRequest,
         principal: Principal
     ): ResponseEntity<AdminUserDto> {
         val updated = adminService.updateRole(userId, body.role)
@@ -128,7 +131,7 @@ class AdminController(
     @PatchMapping("/reports/{reportId}")
     fun updateReport(
         @PathVariable reportId: UUID,
-        @RequestBody body: ReportUpdateRequest,
+        @Valid @RequestBody body: ReportUpdateRequest,
         principal: Principal
     ): ResponseEntity<Map<String, Any>> {
         val updated = adminService.updateReport(reportId, body.status, body.reviewNotes)
@@ -183,10 +186,15 @@ data class AdminUserDto(
     val readinessScore: Double
 )
 
-data class RoleUpdateRequest(val role: String)
+data class RoleUpdateRequest(
+    @field:NotBlank(message = "role is required")
+    val role: String
+)
 
 data class ReportUpdateRequest(
+    @field:NotBlank(message = "status is required")
     val status: String,
+    @field:Size(max = 1000, message = "reviewNotes must be at most 1000 characters")
     val reviewNotes: String? = null
 )
 

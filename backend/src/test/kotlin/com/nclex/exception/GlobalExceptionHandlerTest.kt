@@ -36,6 +36,7 @@ class GlobalExceptionHandlerTest {
         handler = GlobalExceptionHandler(auditLogger, request)
 
         every { request.getAttribute("userId") } returns null
+        every { request.getHeader("X-Forwarded-For") } returns null
         every { request.remoteAddr } returns "127.0.0.1"
         every { request.requestURI } returns "/api/test"
         every { request.method } returns "GET"
