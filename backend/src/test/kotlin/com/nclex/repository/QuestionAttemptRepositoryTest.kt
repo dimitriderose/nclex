@@ -70,20 +70,43 @@ class QuestionAttemptRepositoryTest {
             contentHash = "hash-${UUID.randomUUID()}",
             createdAt = Instant.now()
         )
-        questionId = entityManager.persistAndFlush(question).id
+        val merged = entityManager.entityManager.merge(question)
+        entityManager.entityManager.flush()
+        questionId = merged.id
     }
 
     @AfterEach
     fun cleanup() {
+        // @DataJpaTest already rolls back the per-test transaction, so this is
+        // belt-and-suspenders cleanup. Tests that intentionally trigger a
+        // DB-level constraint violation leave the Postgres transaction in an
+        // aborted state ("current transaction is aborted, commands ignored
+        // until end of transaction block"), where any further statement -
+        // including these deletes - would throw and fail the test. Skip
+        // cleanup in that case; the rollback will discard everything anyway.
+        if (isTransactionAborted()) return
+
         entityManager.entityManager.createNativeQuery("DELETE FROM question_attempts").executeUpdate()
         entityManager.entityManager.createNativeQuery("DELETE FROM generated_questions").executeUpdate()
         entityManager.entityManager.createNativeQuery("DELETE FROM users").executeUpdate()
     }
 
-    private fun saveAttempt(correct: Boolean, source: String = "practice"): QuestionAttempt =
-        entityManager.persistAndFlush(
+    private fun isTransactionAborted(): Boolean =
+        try {
+            entityManager.entityManager.createNativeQuery("SELECT 1").singleResult
+            false
+        } catch (e: Exception) {
+            entityManager.entityManager.clear()
+            true
+        }
+
+    private fun saveAttempt(correct: Boolean, source: String = "practice"): QuestionAttempt {
+        val merged = entityManager.entityManager.merge(
             QuestionAttempt(userId = userId, questionId = questionId, correct = correct, source = source)
         )
+        entityManager.entityManager.flush()
+        return merged
+    }
 
     // ── findByUserIdAndQuestionId ────────────────────────────────────
 
@@ -131,11 +154,17 @@ class QuestionAttemptRepositoryTest {
     private fun assertThatPersistFails(attempt: QuestionAttempt) {
         var threw = false
         try {
-            entityManager.entityManager.persist(attempt)
+            entityManager.entityManager.merge(attempt)
             entityManager.entityManager.flush()
         } catch (e: Exception) {
             threw = true
             assertThat(e).isInstanceOfAny(DataIntegrityViolationException::class.java, RuntimeException::class.java)
+            // Postgres aborts the surrounding transaction once a statement
+            // fails at the DB level. Clear the persistence context so any
+            // later interaction within this test (or @AfterEach cleanup,
+            // which detects and skips on an aborted transaction) doesn't
+            // trip over stale managed entities.
+            entityManager.entityManager.clear()
         }
         assertThat(threw).isTrue
     }
