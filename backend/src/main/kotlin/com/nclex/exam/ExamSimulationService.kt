@@ -2,7 +2,12 @@ package com.nclex.exam
 
 import com.nclex.model.ExamSession
 import com.nclex.model.ExamStatus
+import com.nclex.model.GeneratedQuestion
+import com.nclex.model.QuestionAttempt
+import com.nclex.question.QuestionBankService
 import com.nclex.repository.ExamSessionRepository
+import com.nclex.repository.GeneratedQuestionRepository
+import com.nclex.repository.QuestionAttemptRepository
 import com.nclex.repository.UserStatsRepository
 import com.nclex.audit.AuditLogger
 import com.nclex.exception.ForbiddenException
@@ -31,7 +36,10 @@ import kotlin.random.Random
 class ExamSimulationService(
     private val examSessionRepository: ExamSessionRepository,
     private val userStatsRepository: UserStatsRepository,
-    private val auditLogger: AuditLogger
+    private val auditLogger: AuditLogger,
+    private val questionBankService: QuestionBankService,
+    private val generatedQuestionRepository: GeneratedQuestionRepository,
+    private val questionAttemptRepository: QuestionAttemptRepository
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
 
@@ -92,6 +100,30 @@ class ExamSimulationService(
 
     // ── Submit Answer ────────────────────────────────────────────
 
+    /**
+     * Grades the submitted answer and persists everything (session state, question_attempts,
+     * questionHistory) in one short transaction — but does NOT fetch the next question here.
+     *
+     * Why the split (Architect "Transaction boundaries" finding, applied one level up from
+     * QuestionBankService): the response also needs `nextQuestion`, and getNextQuestion() is
+     * bank-first but can fall through to a multi-second blocking Claude call on a cold
+     * topic/difficulty combo. If that fetch happened inside this @Transactional (as the old
+     * "everything in submitAnswer" shape would do once wired to the bank), the LLM round trip
+     * would run *inside* the grading transaction, holding a DB connection for its duration
+     * under concurrent exam load — exactly the anti-pattern the plan calls out for
+     * QuestionBankService's generateQuestion(), just one call frame removed.
+     *
+     * Shape: (a)/(b) grading reads (lookupServedQuestion, evaluateAnswer — pure DB reads /
+     * in-memory comparison, no LLM) + (c) this short @Transactional persists the outcome.
+     * The controller calls this, then separately calls getNextQuestion() (non-transactional)
+     * to assemble the full response — see ExamSimulationController.submitAnswer.
+     *
+     * Returns either:
+     *   - finishExam's full results map (examContinues = false) if the exam ended as a side
+     *     effect of this submission (timeout or CAT termination), or
+     *   - a partial "continue" map (examContinues = true, no `nextQuestion` key yet) that
+     *     the controller completes by merging in getNextQuestion()'s result.
+     */
     @Transactional
     fun submitAnswer(userId: UUID, sessionId: UUID, request: AnswerRequest): Map<String, Any> {
         val session = getSessionForUser(userId, sessionId)
@@ -103,11 +135,31 @@ class ExamSimulationService(
             return finishExam(userId, sessionId, ExamStatus.TIMED_OUT)
         }
 
-        // Simulate answer correctness based on difficulty
-        // In production this would check against a question bank
-        val isCorrect = evaluateAnswer(request, session.currentDifficulty)
+        // Real answer-checking: look up the served question's persisted correct_answer
+        // JSONB from the bank by request.questionId (rather than stashing it on the
+        // session — robust against getExamState/getNextQuestion being called multiple
+        // times between submissions, and avoids a migration change to ExamSession).
+        val servedQuestion = lookupServedQuestion(request.questionId)
+        val isCorrect = evaluateAnswer(request, servedQuestion)
 
-        // Update question history
+        // Record the attempt in question_attempts with source = "exam" so Practice-mode
+        // and Exam-mode history stay queryable from one table (plan's "Coordination with
+        // issue #22" / DBA normalization). Only possible when the question resolves to a
+        // real bank row — bank-shortfall failures can't produce an FK-valid attempt.
+        if (servedQuestion != null) {
+            questionAttemptRepository.save(
+                QuestionAttempt(
+                    userId = userId,
+                    questionId = servedQuestion.id,
+                    correct = isCorrect,
+                    source = "exam"
+                )
+            )
+        }
+
+        // Update question history — store questionId as the join key (DBA's normalization
+        // instinct: resolve full content from generated_questions when building results,
+        // rather than denormalizing stem/options/rationale into questionHistory JSONB twice).
         val historyEntry = mapOf(
             "questionId" to request.questionId,
             "selectedAnswer" to request.selectedAnswer,
@@ -140,14 +192,29 @@ class ExamSimulationService(
 
         examSessionRepository.save(session)
 
+        // Deliberately omits `nextQuestion` — see method doc. The controller fetches it
+        // separately (outside this transaction) via getNextQuestionForSession and merges
+        // it in, so a cold-bank Claude call never holds this transaction's DB connection.
         return mapOf(
             "correct" to isCorrect,
             "questionsAnswered" to session.totalQuestions,
             "currentDifficulty" to session.currentDifficulty,
-            "nextQuestion" to getNextQuestion(session),
             "elapsedSeconds" to elapsed,
             "examContinues" to true
         )
+    }
+
+    /**
+     * Non-transactional companion to [submitAnswer] — re-fetches the (just-updated) session
+     * and returns its next question, bank-first. Called by the controller *after*
+     * submitAnswer's transaction has already committed, specifically so a cold-bank Claude
+     * call (inside getNextQuestion -> QuestionBankService.getQuestions) never runs while a
+     * grading transaction holds a DB connection. See submitAnswer's doc for the full
+     * "Transaction boundaries" reasoning.
+     */
+    fun getNextQuestionForSession(userId: UUID, sessionId: UUID): Map<String, Any> {
+        val session = getSessionForUser(userId, sessionId)
+        return getNextQuestion(session)
     }
 
     // ── Finish Exam ──────────────────────────────────────────────
@@ -243,17 +310,51 @@ class ExamSimulationService(
     fun getNextQuestion(session: ExamSession): Map<String, Any> {
         val topic = selectTopicForQuestion(session)
         val difficulty = session.currentDifficulty
+        val difficultyLabel = getDifficultyLabel(difficulty)
         val questionNumber = session.totalQuestions + 1
+        val bankDifficulty = toBankDifficulty(difficulty)
 
-        // Generate a question placeholder
-        // In production, this would pull from the question bank or Claude
+        // Phase 5 / closes #22: pull a real bank-sourced question instead of the
+        // "Question N: [topic at difficulty]" placeholder with generic Option A/B/C/D.
+        // questionBankService.getQuestions is bank-first (mostly avoids a Claude call once
+        // the pool has matured) and persists any freshly-generated shortfall, so the
+        // returned id always resolves to a real generated_questions row for evaluateAnswer.
+        val served = questionBankService.getQuestions(
+            topic = topic,
+            questionType = "mc",
+            difficulty = bankDifficulty,
+            userId = session.userId,
+            count = 1
+        ).firstOrNull()
+
+        if (served != null) {
+            return mapOf(
+                "questionId" to served.id,
+                "questionNumber" to questionNumber,
+                "topic" to topic,
+                "difficulty" to difficulty,
+                "difficultyLabel" to difficultyLabel,
+                "stem" to served.stem,
+                "options" to served.options.map { mapOf("id" to it.id, "text" to it.text) },
+                "type" to served.type.uppercase(),
+                "ncjmmStep" to served.ncjmmStep,
+                "maxQuestions" to MAX_QUESTIONS,
+                "minQuestions" to MIN_QUESTIONS
+            )
+        }
+
+        // Degrade gracefully if the bank can't serve even one question (e.g. generation
+        // failure on a cold topic+difficulty combo with an empty pool) — keeps the exam
+        // moving rather than 500ing mid-session. evaluateAnswer/buildQuestionReview both
+        // handle a placeholder/unresolvable questionId gracefully (mark wrong, no review content).
+        logger.warn("Question bank returned no question for topic='{}' difficulty='{}' — falling back to placeholder", topic, bankDifficulty)
         return mapOf(
             "questionId" to UUID.randomUUID().toString(),
             "questionNumber" to questionNumber,
             "topic" to topic,
             "difficulty" to difficulty,
-            "difficultyLabel" to getDifficultyLabel(difficulty),
-            "stem" to "Question $questionNumber: [$topic at ${getDifficultyLabel(difficulty)} difficulty]",
+            "difficultyLabel" to difficultyLabel,
+            "stem" to "Question $questionNumber: [$topic at $difficultyLabel difficulty]",
             "options" to listOf(
                 mapOf("id" to "A", "text" to "Option A"),
                 mapOf("id" to "B", "text" to "Option B"),
@@ -264,6 +365,19 @@ class ExamSimulationService(
             "maxQuestions" to MAX_QUESTIONS,
             "minQuestions" to MIN_QUESTIONS
         )
+    }
+
+    /**
+     * Maps the CAT algorithm's continuous 0.1-0.95 difficulty scale onto the bank's
+     * three-bucket VARCHAR difficulty ("easy"/"medium"/"hard") — the granularity
+     * generated_questions/QuestionGenerationService actually use (and the dimension
+     * idx_generated_questions_bank_lookup is keyed on for equality). Buckets mirror
+     * getDifficultyLabel's thresholds collapsed from five labels to three bank values.
+     */
+    private fun toBankDifficulty(difficulty: Double): String = when {
+        difficulty >= 0.65 -> "hard"
+        difficulty >= 0.35 -> "medium"
+        else -> "easy"
     }
 
     // ── CAT Algorithm ────────────────────────────────────────────
@@ -400,13 +514,41 @@ class ExamSimulationService(
 
     // ── Answer Evaluation ────────────────────────────────────────
 
-    private fun evaluateAnswer(request: AnswerRequest, difficulty: Double): Boolean {
-        // Placeholder: In production, look up the correct answer from question bank
-        // For simulation, randomly determine based on a student model
-        // Higher difficulty = lower chance of correct answer
-        val baseCorrectRate = 0.65 // average nursing student
-        val adjustedRate = baseCorrectRate - (difficulty - 0.5) * 0.4
-        return Random.nextDouble() < max(0.2, min(0.9, adjustedRate))
+    /**
+     * Resolves request.questionId to its persisted generated_questions row, if any.
+     * Returns null for placeholder/unresolvable ids (bank-shortfall failure path, or a
+     * stale id from a pre-Phase-5 session) — callers must handle that gracefully rather
+     * than throwing, so one bad id can't 500 an in-progress timed exam.
+     */
+    private fun lookupServedQuestion(questionId: String): GeneratedQuestion? {
+        val id = runCatching { UUID.fromString(questionId) }.getOrNull() ?: return null
+        return generatedQuestionRepository.findById(id).orElse(null)
+    }
+
+    /**
+     * Real answer-checking (replaces the former Random.nextDouble()-against-a-"simulated
+     * student model" placeholder): compares request.selectedAnswer to the served question's
+     * persisted correct_answer JSONB, shaped as {"correctOptionIds": [...]} by
+     * QuestionBankService.buildCorrectAnswer — the same shape the frontend's
+     * scoreMC/scoreSATA interpret. Exam questions are served as single-select "mc"
+     * (selectedAnswer is one option id), so "correct" means that id is among the
+     * correct option ids.
+     *
+     * If the question can't be resolved (bank-shortfall/placeholder path), the answer
+     * cannot be verified — count it as incorrect rather than guessing randomly, since a
+     * wrong default that's at least *deterministic* and auditable beats reintroducing
+     * the residual-randomization smell the plan called out.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun evaluateAnswer(request: AnswerRequest, servedQuestion: GeneratedQuestion?): Boolean {
+        if (servedQuestion == null) {
+            logger.warn("evaluateAnswer: could not resolve questionId='{}' to a bank row — marking incorrect", request.questionId)
+            return false
+        }
+        val correctOptionIds = (servedQuestion.correctAnswer["correctOptionIds"] as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?: emptyList()
+        return correctOptionIds.contains(request.selectedAnswer)
     }
 
     // ── Results Builder ──────────────────────────────────────────
@@ -453,8 +595,56 @@ class ExamSimulationService(
             ),
             "startedAt" to session.startedAt.toString(),
             "completedAt" to (session.completedAt?.toString() ?: ""),
-            "examContinues" to false
+            "examContinues" to false,
+            "questionReview" to buildQuestionReview(session)
         )
+    }
+
+    /**
+     * One entry per answered question for the post-exam "Review Answers" screen — closes
+     * out #22's acceptance criteria (✓/✗, stem, selected vs. correct answer, rationale for
+     * misses, topic/NCJMM badges). Per the DBA's normalization instinct: questionHistory
+     * stores only `questionId` as a join key, so full content (stem/options/rationale/
+     * correctAnswer/ncjmmStep) is resolved here from generated_questions in one batch fetch
+     * — avoiding the same content living (and drifting) in two places.
+     *
+     * Entries whose questionId doesn't resolve to a bank row (bank-shortfall/placeholder
+     * path) degrade gracefully — empty stem/options/rationale/correctAnswer — exactly as
+     * QuestionReviewEntry's frontend consumer (QuestionReviewRow) is documented to expect.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun buildQuestionReview(session: ExamSession): List<Map<String, Any>> {
+        val questionIds = session.questionHistory
+            .mapNotNull { (it["questionId"] as? String) }
+            .mapNotNull { runCatching { UUID.fromString(it) }.getOrNull() }
+            .distinct()
+        val questionsById = if (questionIds.isNotEmpty()) {
+            generatedQuestionRepository.findAllById(questionIds).associateBy { it.id }
+        } else {
+            emptyMap()
+        }
+
+        return session.questionHistory.map { entry ->
+            val questionIdStr = entry["questionId"] as? String ?: ""
+            val question = questionIdStr.let { idStr ->
+                runCatching { UUID.fromString(idStr) }.getOrNull()?.let { questionsById[it] }
+            }
+            val isCorrect = entry["correct"] as? Boolean ?: false
+
+            mapOf<String, Any>(
+                "questionId" to questionIdStr,
+                "correct" to isCorrect,
+                "stem" to (question?.stem ?: ""),
+                "options" to (question?.options?.map {
+                    mapOf("id" to (it["id"] as? String ?: ""), "text" to (it["text"] as? String ?: ""))
+                } ?: emptyList<Map<String, String>>()),
+                "selectedAnswer" to (entry["selectedAnswer"] as? String ?: ""),
+                "correctAnswer" to (question?.correctAnswer ?: emptyMap<String, Any>()),
+                "rationale" to (question?.rationale ?: ""),
+                "topic" to (question?.topic ?: ""),
+                "ncjmmStep" to (question?.ncjmmStep ?: "")
+            )
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────

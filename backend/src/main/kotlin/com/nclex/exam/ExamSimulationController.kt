@@ -35,6 +35,14 @@ class ExamSimulationController(
     /**
      * POST /api/exam/{id}/answer
      * Submit an answer to the current question.
+     *
+     * Two-step orchestration (Architect "Transaction boundaries" finding): submitAnswer
+     * grades + persists everything in one short @Transactional and returns without a
+     * `nextQuestion` when the exam continues; getNextQuestionForSession is then called
+     * separately, *after* that transaction has committed, because it can fall through to
+     * a multi-second blocking Claude call on a cold bank — which must never run while a
+     * grading transaction holds a DB connection open. See ExamSimulationService.submitAnswer's
+     * doc for the full reasoning.
      */
     @PostMapping("/{id}/answer")
     fun submitAnswer(
@@ -43,7 +51,13 @@ class ExamSimulationController(
         @Valid @RequestBody request: AnswerRequest
     ): ResponseEntity<Any> {
         val result = examSimulationService.submitAnswer(userId, id, request)
-        return ResponseEntity.ok(result)
+        val examContinues = result["examContinues"] as? Boolean ?: false
+        val response = if (examContinues) {
+            result + ("nextQuestion" to examSimulationService.getNextQuestionForSession(userId, id))
+        } else {
+            result
+        }
+        return ResponseEntity.ok(response)
     }
 
     /**

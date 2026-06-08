@@ -371,4 +371,311 @@ describe('ExamSimulation', () => {
 
     expect(screen.getByRole('button', { name: /take another exam/i })).toBeInTheDocument()
   })
+
+  // ── Review Answers screen ────────────────────────────────────
+
+  describe('Review Answers screen', () => {
+    const correctEntry = {
+      questionId: 'q1',
+      correct: true,
+      stem: 'What is the action of metoprolol?',
+      options: [
+        { id: 'A', text: 'Beta blocker' },
+        { id: 'B', text: 'ACE inhibitor' },
+      ],
+      selectedAnswer: 'A',
+      correctAnswer: { correctOptionIds: ['A'] },
+      rationale: 'Metoprolol is a beta blocker used to manage hypertension.',
+      topic: 'Pharmacology',
+      ncjmmStep: 'recognize_cues',
+    }
+
+    const incorrectEntry = {
+      questionId: 'q2',
+      correct: false,
+      stem: 'What is the priority nursing action for a hypotensive patient?',
+      options: [
+        { id: 'A', text: 'Call the physician' },
+        { id: 'B', text: 'Assess the patient' },
+      ],
+      selectedAnswer: 'A',
+      correctAnswer: { correctOptionIds: ['B'] },
+      rationale: 'Assessment should precede escalation per the nursing process.',
+      topic: 'Safety',
+      ncjmmStep: 'take_action',
+    }
+
+    const degradedEntry = {
+      questionId: 'q3',
+      correct: false,
+      stem: '',
+      options: [],
+      selectedAnswer: '',
+      correctAnswer: {},
+      rationale: '',
+      topic: '',
+      ncjmmStep: '',
+    }
+
+    function resultsWithReview(questionReview: unknown[], overrides: Record<string, unknown> = {}) {
+      return {
+        correct: true,
+        questionsAnswered: 75,
+        currentDifficulty: 0.7,
+        elapsedSeconds: 3600,
+        examContinues: false,
+        passPrediction: true,
+        confidenceLevel: 0.95,
+        totalQuestions: questionReview.length,
+        correctCount: questionReview.filter((e) => (e as { correct: boolean }).correct).length,
+        accuracy: 50,
+        topicBreakdown: {},
+        timeAnalysis: { avgTimePerQuestion: 48, totalTimeMinutes: 60, remainingMinutes: 240 },
+        difficultyAnalysis: { initial: 0.5, average: 0.6, final: 0.7, trend: 'increasing' },
+        questionReview,
+        ...overrides,
+      }
+    }
+
+    async function finishExamWithReview(questionReview: unknown[], overrides: Record<string, unknown> = {}) {
+      mockStartExam.mockResolvedValue(mockExamStart)
+      mockSubmitAnswer.mockResolvedValue(resultsWithReview(questionReview, overrides))
+
+      render(<ExamSimulation />)
+      fireEvent.click(screen.getByRole('button', { name: /begin exam/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Beta blocker')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('Beta blocker'))
+      fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('PASS')).toBeInTheDocument()
+      })
+    }
+
+    it('shows Review Answers button only when questionReview is non-empty', async () => {
+      await finishExamWithReview([correctEntry, incorrectEntry])
+      expect(screen.getByRole('button', { name: /review answers/i })).toBeInTheDocument()
+    })
+
+    it('hides Review Answers button when questionReview is empty', async () => {
+      await finishExamWithReview([])
+      expect(screen.queryByRole('button', { name: /review answers/i })).not.toBeInTheDocument()
+    })
+
+    it('hides Review Answers button when questionReview is undefined', async () => {
+      mockStartExam.mockResolvedValue(mockExamStart)
+      mockSubmitAnswer.mockResolvedValue({
+        correct: true,
+        questionsAnswered: 75,
+        currentDifficulty: 0.7,
+        elapsedSeconds: 3600,
+        examContinues: false,
+        passPrediction: true,
+        confidenceLevel: 0.95,
+        totalQuestions: 75,
+        correctCount: 60,
+        accuracy: 80,
+        topicBreakdown: {},
+        timeAnalysis: { avgTimePerQuestion: 48, totalTimeMinutes: 60, remainingMinutes: 240 },
+        // questionReview intentionally omitted
+      })
+
+      render(<ExamSimulation />)
+      fireEvent.click(screen.getByRole('button', { name: /begin exam/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Beta blocker')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('Beta blocker'))
+      fireEvent.click(screen.getByRole('button', { name: /next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('PASS')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByRole('button', { name: /review answers/i })).not.toBeInTheDocument()
+    })
+
+    it('opens the review screen with the correct/total header', async () => {
+      await finishExamWithReview([correctEntry, incorrectEntry])
+
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+      expect(screen.getByText('1 / 2 correct')).toBeInTheDocument()
+    })
+
+    it('renders one review row per question entry', async () => {
+      await finishExamWithReview([correctEntry, incorrectEntry])
+
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Question 1')).toBeInTheDocument()
+      expect(screen.getByText('Question 2')).toBeInTheDocument()
+    })
+
+    it('renders a correct entry without a correct-answer or rationale section', async () => {
+      await finishExamWithReview([correctEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      expect(screen.getByLabelText('Correct')).toBeInTheDocument()
+      expect(screen.getByText('What is the action of metoprolol?')).toBeInTheDocument()
+
+      const yourAnswerLabel = screen.getByText('Your answer:')
+      const row = yourAnswerLabel.closest('.review-answer-row') as HTMLElement
+      expect(row.querySelector('.review-answer-value.correct')).toHaveTextContent('A. Beta blocker')
+
+      expect(screen.queryByText('Correct answer:')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Rationale:/)).not.toBeInTheDocument()
+      expect(screen.queryByText(correctEntry.rationale)).not.toBeInTheDocument()
+    })
+
+    it('renders an incorrect entry showing both the chosen and correct answer', async () => {
+      await finishExamWithReview([incorrectEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      expect(screen.getByLabelText('Incorrect')).toBeInTheDocument()
+      expect(screen.getByText(incorrectEntry.stem)).toBeInTheDocument()
+
+      const yourAnswerLabel = screen.getByText('Your answer:')
+      const row = yourAnswerLabel.closest('.review-answer-row') as HTMLElement
+      expect(row.querySelector('.review-answer-value.incorrect')).toHaveTextContent('A. Call the physician')
+
+      expect(screen.getByText('Correct answer:')).toBeInTheDocument()
+      expect(row.querySelector('.review-answer-comparison .review-answer-value.correct')).toHaveTextContent('B. Assess the patient')
+    })
+
+    it('renders the rationale for an incorrect entry', async () => {
+      await finishExamWithReview([incorrectEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Rationale:')).toBeInTheDocument()
+      expect(screen.getByText(new RegExp(incorrectEntry.rationale))).toBeInTheDocument()
+    })
+
+    it('maps NCJMM step keys to human-readable badge labels', async () => {
+      await finishExamWithReview([incorrectEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Safety')).toBeInTheDocument()
+      expect(screen.getByText('Take Action')).toBeInTheDocument()
+      expect(screen.queryByText('take_action')).not.toBeInTheDocument()
+    })
+
+    it('renders fallback placeholders for a degraded entry with a missing selected answer', async () => {
+      await finishExamWithReview([degradedEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      const yourAnswerLabel = screen.getByText('Your answer:')
+      const row = yourAnswerLabel.closest('.review-answer-row') as HTMLElement
+      expect(row.querySelector('.review-answer-value.incorrect')).toHaveTextContent('—')
+    })
+
+    it('renders a fallback placeholder for a degraded entry with missing correct-answer options', async () => {
+      await finishExamWithReview([degradedEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      const yourAnswerLabel = screen.getByText('Your answer:')
+      const row = yourAnswerLabel.closest('.review-answer-row') as HTMLElement
+      expect(row.querySelector('.review-answer-comparison .review-answer-value.correct')).toHaveTextContent('—')
+    })
+
+    it('omits the stem and rationale elements for a degraded entry with empty text fields', async () => {
+      await finishExamWithReview([degradedEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      const yourAnswerLabel = screen.getByText('Your answer:')
+      const row = yourAnswerLabel.closest('.review-answer-row') as HTMLElement
+      expect(row.querySelector('.review-stem')).toBeNull()
+      expect(row.querySelector('.review-rationale')).toBeNull()
+    })
+
+    it('omits the topic and NCJMM badges for a degraded entry with empty classification fields', async () => {
+      await finishExamWithReview([degradedEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Question 1')).toBeInTheDocument()
+      expect(screen.getByLabelText('Incorrect')).toBeInTheDocument()
+
+      const yourAnswerLabel = screen.getByText('Your answer:')
+      const row = yourAnswerLabel.closest('.review-answer-row') as HTMLElement
+      expect(row.querySelector('.review-badge-topic')).toBeNull()
+      expect(row.querySelector('.review-badge-ncjmm')).toBeNull()
+    })
+
+    it('navigates back to results via "Back to Results"', async () => {
+      await finishExamWithReview([correctEntry, incorrectEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /back to results/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('PASS')).toBeInTheDocument()
+      })
+      // The review screen's heading is gone (the results screen still has a "Review Answers" button)
+      expect(screen.queryByRole('heading', { name: 'Review Answers' })).not.toBeInTheDocument()
+      expect(screen.queryByText(/correct$/)).not.toBeInTheDocument()
+    })
+
+    it('returns to the start screen from the review screen', async () => {
+      await finishExamWithReview([correctEntry, incorrectEntry])
+      fireEvent.click(screen.getByRole('button', { name: /review answers/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Review Answers')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: /take another exam/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('NCLEX-RN Exam Simulation')).toBeInTheDocument()
+      })
+    })
+  })
 })

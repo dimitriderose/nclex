@@ -34,6 +34,40 @@ export function useOnlineStatus(): OfflineState & {
     };
   }, []);
 
+  // Offline-bank population trigger (Phase 3 / PRD §5.9): "session end" isn't a single
+  // browser event, so we treat the tab going hidden (user switches away/minimizes — the
+  // most reliable cross-browser proxy for "wrapping up a session", unlike 'beforeunload'
+  // which is unreliable for async work) and the connection actually going offline as the
+  // two practical "session end" signals. Both are while-online checks (regeneration needs
+  // network); `maybeRegenerateBank` itself no-ops when the bank isn't stale, so this is
+  // safe to fire opportunistically without throttling here.
+  useEffect(() => {
+    const maybeRegenerate = () => {
+      if (!navigator.onLine) return;
+      offlineBank.maybeRegenerateBank()
+        .then((didRegenerate) => {
+          if (didRegenerate) {
+            setOfflineBankSize(offlineBank.getBankSize());
+          }
+        })
+        .catch(() => {});
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        maybeRegenerate();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', maybeRegenerate);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', maybeRegenerate);
+    };
+  }, []);
+
   // Periodically check queue length
   useEffect(() => {
     const interval = setInterval(() => {

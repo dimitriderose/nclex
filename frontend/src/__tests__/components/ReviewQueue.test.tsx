@@ -13,6 +13,10 @@ vi.mock('../../services/spaced-repetition', () => ({
   spacedRepetitionService: {
     getDueItems: vi.fn(),
     reviewQuestion: vi.fn(),
+    // Phase 4: backend-durable sync + cutover/reconciliation — stubbed as no-ops so the
+    // existing localStorage-era assertions keep testing what they tested, while also
+    // exercising the new call sites loadFlags now goes through.
+    reconcileWithBackend: vi.fn().mockResolvedValue(undefined),
   },
 }))
 
@@ -201,5 +205,139 @@ describe('ReviewQueue', () => {
     expect(screen.getByText('Ease: 2.50')).toBeInTheDocument()
     expect(screen.getByText('Interval: 1d')).toBeInTheDocument()
     expect(screen.getByText('Reps: 0')).toBeInTheDocument()
+  })
+
+  // ── Backend hydration & sync (Package H, items 7 & 8) ─────────
+
+  it('displays SM-2 values from backend-sourced flag columns', async () => {
+    // Flags carry durable SM-2 columns (V8) — no localStorage entries exist.
+    const backendFlag = {
+      id: 'f1',
+      userId: 'u1',
+      topic: 'Test',
+      question: {},
+      category: 'REVIEW' as const,
+      notes: null,
+      createdAt: '',
+      updatedAt: '',
+      questionId: 'q-bank-1',
+      easinessFactor: 1.9,
+      repetitionCount: 4,
+      intervalDays: 12,
+      nextReviewDate: '2020-01-01T00:00:00Z',
+      lastReviewedAt: '2026-05-01T00:00:00Z',
+    }
+    vi.mocked(api.getFlags).mockResolvedValue([backendFlag])
+
+    // The mocked getDueItems stands in for resolveSM2Data — its return reflects what the
+    // real service would hydrate from the backend columns (not the SM2 defaults of 2.5/0/0).
+    const backendDerivedItem = {
+      ...makeReviewItem('f1'),
+      sm2: {
+        easeFactor: backendFlag.easinessFactor,
+        interval: backendFlag.intervalDays,
+        repetitions: backendFlag.repetitionCount,
+        nextReviewDate: backendFlag.nextReviewDate,
+        lastReviewDate: backendFlag.lastReviewedAt,
+        lastGrade: 0,
+      },
+    }
+    vi.mocked(spacedRepetitionService.getDueItems).mockReturnValue([backendDerivedItem])
+
+    render(<ReviewQueue />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Spaced Review')).toBeInTheDocument()
+    })
+
+    // getDueItems was driven from the backend-flag-bearing array (post-reconciliation refetch)
+    expect(spacedRepetitionService.getDueItems).toHaveBeenCalledWith([backendFlag])
+
+    fireEvent.click(screen.getByText('Mock Answer'))
+
+    expect(screen.getByText('Ease: 1.90')).toBeInTheDocument()
+    expect(screen.getByText('Interval: 12d')).toBeInTheDocument()
+    expect(screen.getByText('Reps: 4')).toBeInTheDocument()
+  })
+
+  it('does not display the SM-2 default ease value when backend columns are present', async () => {
+    const backendFlag = {
+      id: 'f1',
+      userId: 'u1',
+      topic: 'Test',
+      question: {},
+      category: 'REVIEW' as const,
+      notes: null,
+      createdAt: '',
+      updatedAt: '',
+      questionId: 'q-bank-1',
+      easinessFactor: 1.9,
+      repetitionCount: 4,
+      intervalDays: 12,
+      nextReviewDate: '2020-01-01T00:00:00Z',
+      lastReviewedAt: '2026-05-01T00:00:00Z',
+    }
+    vi.mocked(api.getFlags).mockResolvedValue([backendFlag])
+
+    const backendDerivedItem = {
+      ...makeReviewItem('f1'),
+      sm2: {
+        easeFactor: backendFlag.easinessFactor,
+        interval: backendFlag.intervalDays,
+        repetitions: backendFlag.repetitionCount,
+        nextReviewDate: backendFlag.nextReviewDate,
+        lastReviewDate: backendFlag.lastReviewedAt,
+        lastGrade: 0,
+      },
+    }
+    vi.mocked(spacedRepetitionService.getDueItems).mockReturnValue([backendDerivedItem])
+
+    render(<ReviewQueue />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Spaced Review')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Mock Answer'))
+
+    expect(screen.queryByText('Ease: 2.50')).not.toBeInTheDocument()
+  })
+
+  it('calls reconcileWithBackend before getDueItems on mount', async () => {
+    const flags = [{ id: 'f1', userId: 'u1', topic: 'Test', question: {}, category: 'REVIEW' as const, notes: null, createdAt: '', updatedAt: '' }]
+    vi.mocked(api.getFlags).mockResolvedValue(flags)
+    vi.mocked(spacedRepetitionService.getDueItems).mockReturnValue([makeReviewItem('f1')])
+    vi.mocked(spacedRepetitionService.reviewQuestion).mockReturnValue(makeSM2({ interval: 3 }))
+
+    render(<ReviewQueue />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Spaced Review')).toBeInTheDocument()
+    })
+
+    expect(spacedRepetitionService.reconcileWithBackend).toHaveBeenCalledTimes(1)
+    expect(spacedRepetitionService.reconcileWithBackend).toHaveBeenCalledWith(flags)
+
+    const reconcileOrder = vi.mocked(spacedRepetitionService.reconcileWithBackend).mock.invocationCallOrder[0]
+    const getDueItemsOrder = vi.mocked(spacedRepetitionService.getDueItems).mock.invocationCallOrder[0]
+    expect(reconcileOrder).toBeLessThan(getDueItemsOrder)
+  })
+
+  it('syncs a grading decision through spacedRepetitionService.reviewQuestion', async () => {
+    const flags = [{ id: 'f1', userId: 'u1', topic: 'Test', question: {}, category: 'REVIEW' as const, notes: null, createdAt: '', updatedAt: '' }]
+    vi.mocked(api.getFlags).mockResolvedValue(flags)
+    vi.mocked(spacedRepetitionService.getDueItems).mockReturnValue([makeReviewItem('f1')])
+    vi.mocked(spacedRepetitionService.reviewQuestion).mockReturnValue(makeSM2({ interval: 3 }))
+
+    render(<ReviewQueue />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Spaced Review')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Mock Answer'))
+    fireEvent.click(screen.getByText(/Good/))
+
+    expect(spacedRepetitionService.reviewQuestion).toHaveBeenCalledWith('f1', 4)
   })
 })

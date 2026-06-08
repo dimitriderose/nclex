@@ -163,6 +163,26 @@ export const api = {
     return res.json()
   },
 
+  // Phase 4: durable SM-2 — pushes spaced-repetition review state to the backend so it
+  // becomes the source of truth (PATCH /api/flags/{id}/review). Dates are passed as
+  // ISO strings (or null) per the backend contract.
+  async updateFlagReview(
+    id: string,
+    data: {
+      easinessFactor: number
+      repetitionCount: number
+      intervalDays: number
+      nextReviewDate: string | null
+      lastReviewedAt: string | null
+    }
+  ): Promise<FlaggedQuestion> {
+    const res = await authedFetch(`/flags/${id}/review`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  },
+
   async deleteFlag(id: string): Promise<void> {
     await authedFetch(`/flags/${id}`, { method: 'DELETE' })
   },

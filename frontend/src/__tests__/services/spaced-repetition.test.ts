@@ -1,11 +1,24 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { calculateSM2, createInitialSM2, spacedRepetitionService } from '../../services/spaced-repetition'
 import type { SM2Data } from '../../types/content'
 import type { FlaggedQuestion } from '../../types'
 
-const SM2_STORAGE_KEY = 'nclex:sm2_data'
+// spacedRepetitionService now syncs through to the backend (Phase 4: durable SM-2 —
+// localStorage is an offline-first cache layered on top, not the sole store). Mock the
+// API boundary so these tests stay hermetic; sync is fire-and-forget/best-effort from the
+// service's perspective, so a resolved stub is enough to verify the localStorage contract.
+vi.mock('../../services/api', () => ({
+  api: {
+    updateFlagReview: vi.fn().mockResolvedValue({}),
+  },
+}))
 
-function makeFlaggedQuestion(id: string): FlaggedQuestion {
+import { api } from '../../services/api'
+
+const SM2_STORAGE_KEY = 'nclex:sm2_data'
+const RECONCILED_KEY = 'nclex:sm2_reconciled'
+
+function makeFlaggedQuestion(id: string, overrides: Partial<FlaggedQuestion> = {}): FlaggedQuestion {
   return {
     id,
     userId: 'user-1',
@@ -15,6 +28,7 @@ function makeFlaggedQuestion(id: string): FlaggedQuestion {
     notes: null,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
+    ...overrides,
   }
 }
 
@@ -127,6 +141,8 @@ describe('createInitialSM2', () => {
 describe('spacedRepetitionService', () => {
   beforeEach(() => {
     localStorage.clear()
+    vi.mocked(api.updateFlagReview).mockReset()
+    vi.mocked(api.updateFlagReview).mockResolvedValue({} as never)
   })
 
   describe('getAllSM2Data', () => {
@@ -199,6 +215,119 @@ describe('spacedRepetitionService', () => {
       const result = spacedRepetitionService.reviewQuestion('flag-1', 1)
       expect(result.repetitions).toBe(0)
       expect(result.interval).toBe(1)
+    })
+
+    it('writes through to both localStorage (synchronously) and the backend (pushReviewState)', async () => {
+      const result = spacedRepetitionService.reviewQuestion('flag-1', 4)
+
+      // localStorage cache write happens synchronously, before the async push resolves
+      expect(spacedRepetitionService.getSM2Data('flag-1')).toEqual(result)
+
+      await vi.waitFor(() => {
+        expect(api.updateFlagReview).toHaveBeenCalledTimes(1)
+      })
+      expect(api.updateFlagReview).toHaveBeenCalledWith('flag-1', {
+        easinessFactor: result.easeFactor,
+        repetitionCount: result.repetitions,
+        intervalDays: result.interval,
+        nextReviewDate: result.nextReviewDate,
+        lastReviewedAt: result.lastReviewDate,
+      })
+    })
+
+    it('catches/logs a rejected push without throwing', async () => {
+      vi.mocked(api.updateFlagReview).mockRejectedValueOnce(new Error('network down'))
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      expect(() => spacedRepetitionService.reviewQuestion('flag-1', 4)).not.toThrow()
+
+      await vi.waitFor(() => {
+        expect(warnSpy).toHaveBeenCalled()
+      })
+      expect(warnSpy.mock.calls[0][0]).toMatch(/Failed to sync review state to backend/)
+
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('resolveSM2Data', () => {
+    it('prefers backend-derived values when the flag has backend progress (repetitionCount > 0)', () => {
+      const flag = makeFlaggedQuestion('flag-1', {
+        easinessFactor: 1.9,
+        repetitionCount: 3,
+        intervalDays: 12,
+        nextReviewDate: '2026-05-01T00:00:00Z',
+        lastReviewedAt: '2026-04-20T00:00:00Z',
+      })
+      // Seed a *different* localStorage cache value to prove backend wins
+      spacedRepetitionService.saveSM2Data('flag-1', { ...createInitialSM2(), easeFactor: 2.5, repetitions: 0 })
+
+      const resolved = spacedRepetitionService.resolveSM2Data(flag)
+      expect(resolved.easeFactor).toBe(1.9)
+      expect(resolved.repetitions).toBe(3)
+      expect(resolved.interval).toBe(12)
+      expect(resolved.nextReviewDate).toBe('2026-05-01T00:00:00Z')
+      expect(resolved.lastReviewDate).toBe('2026-04-20T00:00:00Z')
+    })
+
+    it('prefers backend-derived values when the flag has lastReviewedAt set (even with repetitionCount 0)', () => {
+      const flag = makeFlaggedQuestion('flag-1', {
+        easinessFactor: 2.1,
+        repetitionCount: 0,
+        intervalDays: 1,
+        nextReviewDate: '2026-05-02T00:00:00Z',
+        lastReviewedAt: '2026-04-21T00:00:00Z',
+      })
+
+      const resolved = spacedRepetitionService.resolveSM2Data(flag)
+      expect(resolved.easeFactor).toBe(2.1)
+      expect(resolved.lastReviewDate).toBe('2026-04-21T00:00:00Z')
+    })
+
+    it('falls back to the localStorage cache when the flag carries only column defaults', () => {
+      const flag = makeFlaggedQuestion('flag-1', {
+        easinessFactor: 2.5,
+        repetitionCount: 0,
+        intervalDays: 0,
+        nextReviewDate: null,
+        lastReviewedAt: null,
+      })
+      const cached = { ...createInitialSM2(), easeFactor: 1.7, repetitions: 4, interval: 20 }
+      spacedRepetitionService.saveSM2Data('flag-1', cached)
+
+      const resolved = spacedRepetitionService.resolveSM2Data(flag)
+      expect(resolved).toEqual(cached)
+    })
+
+    it('falls back to a fresh initial SM2 when there is neither backend progress nor a cache entry', () => {
+      const flag = makeFlaggedQuestion('flag-1')
+      const resolved = spacedRepetitionService.resolveSM2Data(flag)
+      expect(resolved.easeFactor).toBe(2.5)
+      expect(resolved.repetitions).toBe(0)
+      expect(resolved.interval).toBe(0)
+    })
+  })
+
+  describe('pushReviewState', () => {
+    it('calls api.updateFlagReview with the SM2Data fields mapped 1:1 to the backend payload shape', async () => {
+      const sm2: SM2Data = {
+        easeFactor: 2.3,
+        interval: 6,
+        repetitions: 2,
+        nextReviewDate: '2026-06-10T00:00:00Z',
+        lastReviewDate: '2026-06-04T00:00:00Z',
+        lastGrade: 4,
+      }
+
+      await spacedRepetitionService.pushReviewState('flag-9', sm2)
+
+      expect(api.updateFlagReview).toHaveBeenCalledWith('flag-9', {
+        easinessFactor: sm2.easeFactor,
+        repetitionCount: sm2.repetitions,
+        intervalDays: sm2.interval,
+        nextReviewDate: sm2.nextReviewDate,
+        lastReviewedAt: sm2.lastReviewDate,
+      })
     })
   })
 
@@ -283,6 +412,208 @@ describe('spacedRepetitionService', () => {
 
     it('returns 0 for empty flags', () => {
       expect(spacedRepetitionService.getDueCount([])).toBe(0)
+    })
+  })
+
+  describe('reconcileWithBackend', () => {
+    it('does nothing (and does not push) once RECONCILED_KEY is already set', async () => {
+      localStorage.setItem(RECONCILED_KEY, '2026-01-01T00:00:00Z')
+      spacedRepetitionService.saveSM2Data('flag-1', createInitialSM2())
+      const flags = [makeFlaggedQuestion('flag-1')]
+
+      await spacedRepetitionService.reconcileWithBackend(flags)
+
+      expect(api.updateFlagReview).not.toHaveBeenCalled()
+    })
+
+    it('pushes and re-keys a local entry that directly matches an existing flag', async () => {
+      const sm2 = { ...createInitialSM2(), easeFactor: 1.9, repetitions: 2 }
+      spacedRepetitionService.saveSM2Data('flag-1', sm2)
+      const flag = makeFlaggedQuestion('flag-1') // no backend progress (defaults)
+
+      await spacedRepetitionService.reconcileWithBackend([flag])
+
+      expect(api.updateFlagReview).toHaveBeenCalledTimes(1)
+      expect(api.updateFlagReview).toHaveBeenCalledWith('flag-1', expect.objectContaining({
+        easinessFactor: sm2.easeFactor,
+        repetitionCount: sm2.repetitions,
+      }))
+      // re-keyed (same id here, but verifies the cache write happened)
+      expect(spacedRepetitionService.getSM2Data('flag-1')).toEqual(sm2)
+    })
+
+    it('sets RECONCILED_KEY after pushing a directly-matched local entry', async () => {
+      const sm2 = { ...createInitialSM2(), easeFactor: 1.9, repetitions: 2 }
+      spacedRepetitionService.saveSM2Data('flag-1', sm2)
+      const flag = makeFlaggedQuestion('flag-1') // no backend progress (defaults)
+
+      await spacedRepetitionService.reconcileWithBackend([flag])
+
+      expect(localStorage.getItem(RECONCILED_KEY)).not.toBeNull()
+    })
+
+    it('does not re-push a local entry whose matching flag already has backend progress', async () => {
+      const sm2 = createInitialSM2()
+      spacedRepetitionService.saveSM2Data('flag-1', sm2)
+      const flag = makeFlaggedQuestion('flag-1', { repetitionCount: 5, lastReviewedAt: '2026-03-01T00:00:00Z' })
+
+      await spacedRepetitionService.reconcileWithBackend([flag])
+
+      expect(api.updateFlagReview).not.toHaveBeenCalled()
+      expect(localStorage.getItem(RECONCILED_KEY)).not.toBeNull()
+    })
+
+    it('pairs an orphaned local entry with the single legacy candidate', async () => {
+      const sm2 = { ...createInitialSM2(), easeFactor: 2.1, repetitions: 1 }
+      spacedRepetitionService.saveSM2Data('stale-id', sm2) // no flag has this id -> orphan
+      const legacyCandidate = makeFlaggedQuestion('legacy-1', { questionId: null })
+
+      await spacedRepetitionService.reconcileWithBackend([legacyCandidate])
+
+      expect(api.updateFlagReview).toHaveBeenCalledTimes(1)
+      expect(api.updateFlagReview).toHaveBeenCalledWith('legacy-1', expect.objectContaining({
+        easinessFactor: sm2.easeFactor,
+        repetitionCount: sm2.repetitions,
+      }))
+      // Re-keyed to the resolved flag id
+      expect(spacedRepetitionService.getSM2Data('legacy-1')).toEqual(sm2)
+      expect(localStorage.getItem(RECONCILED_KEY)).not.toBeNull()
+    })
+
+    it('does not pair when there are multiple orphans', async () => {
+      spacedRepetitionService.saveSM2Data('stale-1', createInitialSM2())
+      spacedRepetitionService.saveSM2Data('stale-2', createInitialSM2())
+      const legacyCandidate = makeFlaggedQuestion('legacy-1', { questionId: null })
+
+      await spacedRepetitionService.reconcileWithBackend([legacyCandidate])
+
+      expect(api.updateFlagReview).not.toHaveBeenCalled()
+      // Entries remain localStorage-only, untouched
+      expect(spacedRepetitionService.getSM2Data('stale-1')).toBeDefined()
+      expect(spacedRepetitionService.getSM2Data('stale-2')).toBeDefined()
+    })
+
+    it('does not pair when there are multiple legacy candidates', async () => {
+      spacedRepetitionService.saveSM2Data('stale-id', createInitialSM2())
+      const candidates = [
+        makeFlaggedQuestion('legacy-1', { questionId: null }),
+        makeFlaggedQuestion('legacy-2', { questionId: null }),
+      ]
+
+      await spacedRepetitionService.reconcileWithBackend(candidates)
+
+      expect(api.updateFlagReview).not.toHaveBeenCalled()
+    })
+
+    describe('idempotency — partial failure must not latch RECONCILED_KEY', () => {
+      // Regression coverage for a bug where a failed mid-loop push permanently latched
+      // RECONCILED_KEY, stranding the unsynced entry as localStorage-only forever. The gate
+      // may only latch once every pending push has succeeded, and a retried run must not
+      // double-push entries that already made it through (hasBackendProgress skips those).
+
+      it('does not latch RECONCILED_KEY when a push fails mid-reconciliation', async () => {
+        const sm2A = { ...createInitialSM2(), easeFactor: 1.8, repetitions: 1 }
+        const sm2B = { ...createInitialSM2(), easeFactor: 2.2, repetitions: 2 }
+        spacedRepetitionService.saveSM2Data('flag-a', sm2A)
+        spacedRepetitionService.saveSM2Data('flag-b', sm2B)
+
+        const flagA = makeFlaggedQuestion('flag-a')
+        const flagB = makeFlaggedQuestion('flag-b')
+
+        // flag-a push succeeds, flag-b push fails
+        vi.mocked(api.updateFlagReview).mockImplementation(async (id: string) => {
+          if (id === 'flag-b') throw new Error('network blip')
+          return {} as never
+        })
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        await spacedRepetitionService.reconcileWithBackend([flagA, flagB])
+
+        expect(localStorage.getItem(RECONCILED_KEY)).toBeNull()
+        expect(api.updateFlagReview).toHaveBeenCalledTimes(2)
+        expect(api.updateFlagReview).toHaveBeenCalledWith('flag-a', expect.objectContaining({ repetitionCount: sm2A.repetitions }))
+        expect(api.updateFlagReview).toHaveBeenCalledWith('flag-b', expect.objectContaining({ repetitionCount: sm2B.repetitions }))
+
+        warnSpy.mockRestore()
+      })
+
+      it('latches RECONCILED_KEY on retry once all pushes succeed', async () => {
+        const sm2A = { ...createInitialSM2(), easeFactor: 1.8, repetitions: 1 }
+        const sm2B = { ...createInitialSM2(), easeFactor: 2.2, repetitions: 2 }
+        spacedRepetitionService.saveSM2Data('flag-a', sm2A)
+        spacedRepetitionService.saveSM2Data('flag-b', sm2B)
+
+        const flagA = makeFlaggedQuestion('flag-a')
+        const flagB = makeFlaggedQuestion('flag-b')
+
+        // First pass: flag-a push succeeds, flag-b push fails — gate stays unlatched.
+        vi.mocked(api.updateFlagReview).mockImplementation(async (id: string) => {
+          if (id === 'flag-b') throw new Error('network blip')
+          return {} as never
+        })
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        await spacedRepetitionService.reconcileWithBackend([flagA, flagB])
+        expect(localStorage.getItem(RECONCILED_KEY)).toBeNull()
+
+        // Retry: both entries now push successfully.
+        vi.mocked(api.updateFlagReview).mockClear()
+        vi.mocked(api.updateFlagReview).mockResolvedValue({} as never)
+
+        const flagASynced = makeFlaggedQuestion('flag-a', { repetitionCount: sm2A.repetitions, lastReviewedAt: sm2A.lastReviewDate })
+        const flagBStillPending = makeFlaggedQuestion('flag-b')
+
+        await spacedRepetitionService.reconcileWithBackend([flagASynced, flagBStillPending])
+
+        expect(localStorage.getItem(RECONCILED_KEY)).not.toBeNull()
+
+        warnSpy.mockRestore()
+      })
+
+      it('does not re-push entries that already synced on a prior pass', async () => {
+        const sm2A = { ...createInitialSM2(), easeFactor: 1.8, repetitions: 1 }
+        const sm2B = { ...createInitialSM2(), easeFactor: 2.2, repetitions: 2 }
+        spacedRepetitionService.saveSM2Data('flag-a', sm2A)
+        spacedRepetitionService.saveSM2Data('flag-b', sm2B)
+
+        const flagA = makeFlaggedQuestion('flag-a')
+        const flagB = makeFlaggedQuestion('flag-b')
+
+        // First pass: flag-a push succeeds (and gets re-keyed to the cache), flag-b fails.
+        vi.mocked(api.updateFlagReview).mockImplementation(async (id: string) => {
+          if (id === 'flag-b') throw new Error('network blip')
+          return {} as never
+        })
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        await spacedRepetitionService.reconcileWithBackend([flagA, flagB])
+
+        // Retry: simulate the backend now reporting flag-a as having real progress, so a
+        // subsequent run must treat it as already-synced (direct match via hasBackendProgress)
+        // rather than re-pushing it.
+        vi.mocked(api.updateFlagReview).mockClear()
+        vi.mocked(api.updateFlagReview).mockResolvedValue({} as never)
+
+        const flagASynced = makeFlaggedQuestion('flag-a', { repetitionCount: sm2A.repetitions, lastReviewedAt: sm2A.lastReviewDate })
+        const flagBStillPending = makeFlaggedQuestion('flag-b')
+
+        await spacedRepetitionService.reconcileWithBackend([flagASynced, flagBStillPending])
+
+        // Only flag-b was pushed this time — flag-a is skipped because hasBackendProgress() is true
+        expect(api.updateFlagReview).toHaveBeenCalledTimes(1)
+        expect(api.updateFlagReview).toHaveBeenCalledWith('flag-b', expect.objectContaining({ repetitionCount: sm2B.repetitions }))
+
+        warnSpy.mockRestore()
+      })
+
+      it('latches RECONCILED_KEY immediately when all pending pushes succeed on the first pass', async () => {
+        spacedRepetitionService.saveSM2Data('flag-a', createInitialSM2())
+        spacedRepetitionService.saveSM2Data('flag-b', createInitialSM2())
+        const flags = [makeFlaggedQuestion('flag-a'), makeFlaggedQuestion('flag-b')]
+
+        await spacedRepetitionService.reconcileWithBackend(flags)
+
+        expect(localStorage.getItem(RECONCILED_KEY)).not.toBeNull()
+        expect(api.updateFlagReview).toHaveBeenCalledTimes(2)
+      })
     })
   })
 

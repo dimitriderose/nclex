@@ -20,8 +20,24 @@ export function ReviewQueue() {
     async function loadFlags() {
       try {
         const allFlags = await api.getFlags();
-        setFlags(allFlags);
-        const items = spacedRepetitionService.getDueItems(allFlags);
+
+        // One-time cutover: push any pre-existing localStorage-only SM-2 schedules to the
+        // backend's durable columns before computing due items, so in-flight review
+        // schedules survive the switch to backend-as-source-of-truth (see Phase 4 cutover
+        // note in spaced-repetition.ts). Best-effort — getDueItems still falls back to the
+        // localStorage cache if this fails, so a network hiccup here doesn't block review.
+        let flagsForQueue = allFlags;
+        try {
+          await spacedRepetitionService.reconcileWithBackend(allFlags);
+          // Re-fetch so getDueItems hydrates from the just-reconciled backend SM-2 columns
+          // rather than the pre-reconciliation snapshot.
+          flagsForQueue = await api.getFlags();
+        } catch (e) {
+          console.warn('SM-2 reconciliation failed (will retry next load):', e);
+        }
+
+        setFlags(flagsForQueue);
+        const items = spacedRepetitionService.getDueItems(flagsForQueue);
         setReviewItems(items.filter((i) => i.dueToday));
       } catch (e) {
         console.error('Failed to load flags:', e);
@@ -116,12 +132,12 @@ export function ReviewQueue() {
         <div className="grading-panel">
           <p>How well did you know this?</p>
           <div className="grade-buttons">
-            <button className="grade-btn grade-0" onClick={() => handleGrade(0)}>0\nBlackout</button>
-            <button className="grade-btn grade-1" onClick={() => handleGrade(1)}>1\nWrong</button>
-            <button className="grade-btn grade-2" onClick={() => handleGrade(2)}>2\nBarely</button>
-            <button className="grade-btn grade-3" onClick={() => handleGrade(3)}>3\nHard</button>
-            <button className="grade-btn grade-4" onClick={() => handleGrade(4)}>4\nGood</button>
-            <button className="grade-btn grade-5" onClick={() => handleGrade(5)}>5\nPerfect</button>
+            <button className="grade-btn grade-0" onClick={() => handleGrade(0)}>0{'\n'}Blackout</button>
+            <button className="grade-btn grade-1" onClick={() => handleGrade(1)}>1{'\n'}Wrong</button>
+            <button className="grade-btn grade-2" onClick={() => handleGrade(2)}>2{'\n'}Barely</button>
+            <button className="grade-btn grade-3" onClick={() => handleGrade(3)}>3{'\n'}Hard</button>
+            <button className="grade-btn grade-4" onClick={() => handleGrade(4)}>4{'\n'}Good</button>
+            <button className="grade-btn grade-5" onClick={() => handleGrade(5)}>5{'\n'}Perfect</button>
           </div>
           {currentItem && (
             <div className="sm2-info">

@@ -64,6 +64,20 @@ export const questionService = {
   },
 
   /**
+   * Records a Practice-mode attempt on a bank question (POST /api/questions/{id}/attempt).
+   * Drives both attempt-history and server-side auto-flagging of wrong answers — the
+   * client doesn't need to duplicate that logic. Best-effort: callers should swallow
+   * failures (e.g., questions served from the offline bank/fallback path won't have a
+   * durable bank id the server recognizes).
+   */
+  async recordAttempt(questionId: string, correct: boolean): Promise<void> {
+    await authedFetch(`/questions/${questionId}/attempt`, {
+      method: 'POST',
+      body: JSON.stringify({ correct }),
+    });
+  },
+
+  /**
    * Score a SATA answer with partial credit
    * Formula: (correct selections + correct non-selections) / total options
    */

@@ -484,6 +484,154 @@
   color: #555;
 }
 
+/* Review Answers Screen */
+.exam-review-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.exam-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.exam-review-header h2 {
+  color: #1a1a2e;
+}
+
+.review-summary-count {
+  font-weight: 600;
+  color: #555;
+  background: #f3f4f6;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.review-answer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.review-answer-row {
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 18px;
+  background: #f9fafb;
+}
+
+.review-answer-row.correct {
+  border-left-color: #10b981;
+}
+
+.review-answer-row.incorrect {
+  border-left-color: #ef4444;
+}
+
+.review-answer-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.review-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.review-indicator.correct {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.review-indicator.incorrect {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.review-question-number {
+  font-weight: 600;
+  color: #333;
+}
+
+.review-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.review-badge-topic {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.review-badge-ncjmm {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.review-stem {
+  color: #1a1a2e;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.review-answer-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.review-answer-line {
+  display: flex;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.review-answer-label {
+  font-weight: 600;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.review-answer-value.correct {
+  color: #065f46;
+  font-weight: 600;
+}
+
+.review-answer-value.incorrect {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.review-rationale {
+  font-size: 0.9rem;
+  color: #555;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .exam-info {
@@ -502,6 +650,11 @@
   }
   .exam-header {
     flex-direction: column;
+    gap: 8px;
+  }
+  .exam-review-header {
+    flex-direction: column;
+    align-items: flex-start;
     gap: 8px;
   }
 }

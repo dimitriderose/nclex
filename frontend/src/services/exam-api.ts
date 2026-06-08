@@ -54,6 +54,23 @@ export interface AnswerResponse {
   topicBreakdown?: Record<string, { correct: number; total: number; accuracy: number }>
   timeAnalysis?: { avgTimePerQuestion: number; totalTimeMinutes: number; remainingMinutes: number }
   difficultyAnalysis?: { initial: number; average: number; final: number; trend: string }
+  questionReview?: QuestionReviewEntry[]
+}
+
+// One entry per answered question on the post-exam "Review Answers" screen — sourced from
+// ExamSimulationService.buildQuestionReview. `correctAnswer` mirrors the bank's
+// correct_answer JSONB shape ({ correctOptionIds: [...] }); entries from the bank-shortfall
+// /placeholder path degrade gracefully (empty stem/options/rationale/correctAnswer).
+export interface QuestionReviewEntry {
+  questionId: string
+  correct: boolean
+  stem: string
+  options: { id: string; text: string }[]
+  selectedAnswer: string
+  correctAnswer: { correctOptionIds?: string[] } & Record<string, unknown>
+  rationale: string
+  topic: string
+  ncjmmStep: string
 }
 
 export interface ExamResults {
@@ -72,6 +89,7 @@ export interface ExamResults {
   startedAt: string
   completedAt: string
   examContinues: boolean
+  questionReview: QuestionReviewEntry[]
 }
 
 export interface ExamHistoryItem {

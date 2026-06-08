@@ -15,10 +15,12 @@ vi.mock('../../services/sync-queue', () => ({
 
 // Mock offline-bank
 const mockGetBankSize = vi.fn().mockReturnValue(50)
+const mockMaybeRegenerateBank = vi.fn().mockResolvedValue(false)
 
 vi.mock('../../services/offline-bank', () => ({
   offlineBank: {
     getBankSize: () => mockGetBankSize(),
+    maybeRegenerateBank: (...args: unknown[]) => mockMaybeRegenerateBank(...args),
   },
 }))
 
@@ -28,6 +30,7 @@ describe('useOnlineStatus', () => {
     mockFlush.mockReset().mockResolvedValue({ success: 0, failed: 0 })
     mockGetQueueLength.mockReset().mockReturnValue(0)
     mockGetBankSize.mockReset().mockReturnValue(50)
+    mockMaybeRegenerateBank.mockReset().mockResolvedValue(false)
 
     // Default: online
     Object.defineProperty(navigator, 'onLine', {
@@ -172,5 +175,143 @@ describe('useOnlineStatus', () => {
     const { unmount } = renderHook(() => useOnlineStatus())
     unmount()
     expect(clearIntervalSpy).toHaveBeenCalled()
+  })
+
+  describe('session-end offline-bank regeneration trigger', () => {
+    function setVisibilityState(state: DocumentVisibilityState) {
+      Object.defineProperty(document, 'visibilityState', {
+        value: state,
+        writable: true,
+        configurable: true,
+      })
+    }
+
+    afterEach(() => {
+      // Restore the jsdom default so subsequent tests in this file aren't affected.
+      setVisibilityState('visible')
+    })
+
+    it('calls offlineBank.maybeRegenerateBank on visibilitychange-to-hidden while online', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+      renderHook(() => useOnlineStatus())
+
+      setVisibilityState('hidden')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      expect(mockMaybeRegenerateBank).toHaveBeenCalled()
+    })
+
+    it('does NOT call offlineBank.maybeRegenerateBank on visibilitychange-to-hidden while offline', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+      renderHook(() => useOnlineStatus())
+
+      setVisibilityState('hidden')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      expect(mockMaybeRegenerateBank).not.toHaveBeenCalled()
+    })
+
+    it('does not trigger when visibility changes to visible (not hidden)', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+      renderHook(() => useOnlineStatus())
+
+      setVisibilityState('visible')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      expect(mockMaybeRegenerateBank).not.toHaveBeenCalled()
+    })
+
+    it('calls offlineBank.maybeRegenerateBank on pagehide while online', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+      renderHook(() => useOnlineStatus())
+
+      await act(async () => {
+        window.dispatchEvent(new Event('pagehide'))
+      })
+
+      expect(mockMaybeRegenerateBank).toHaveBeenCalled()
+    })
+
+    it('does NOT call offlineBank.maybeRegenerateBank on pagehide while offline', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+      renderHook(() => useOnlineStatus())
+
+      await act(async () => {
+        window.dispatchEvent(new Event('pagehide'))
+      })
+
+      expect(mockMaybeRegenerateBank).not.toHaveBeenCalled()
+    })
+
+    it('updates offlineBankSize when regeneration succeeds', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+      mockMaybeRegenerateBank.mockResolvedValue(true)
+      mockGetBankSize.mockReturnValue(50)
+
+      const { result } = renderHook(() => useOnlineStatus())
+      expect(result.current.offlineBankSize).toBe(50)
+
+      mockGetBankSize.mockReturnValue(100)
+      setVisibilityState('hidden')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      expect(result.current.offlineBankSize).toBe(100)
+    })
+
+    it('does not update offlineBankSize when regeneration is a no-op (bank fresh)', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+      mockMaybeRegenerateBank.mockResolvedValue(false)
+      mockGetBankSize.mockReturnValue(50)
+
+      const { result } = renderHook(() => useOnlineStatus())
+      expect(result.current.offlineBankSize).toBe(50)
+
+      mockGetBankSize.mockReturnValue(999)
+      setVisibilityState('hidden')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      expect(result.current.offlineBankSize).toBe(50)
+    })
+
+    it('swallows a rejected maybeRegenerateBank without throwing', async () => {
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+      mockMaybeRegenerateBank.mockRejectedValue(new Error('regenerate failed'))
+
+      renderHook(() => useOnlineStatus())
+
+      setVisibilityState('hidden')
+      await expect(act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })).resolves.not.toThrow()
+
+      expect(mockMaybeRegenerateBank).toHaveBeenCalled()
+    })
+
+    it('cleans up visibilitychange and pagehide listeners on unmount', () => {
+      const docAddSpy = vi.spyOn(document, 'addEventListener')
+      const docRemoveSpy = vi.spyOn(document, 'removeEventListener')
+      const winAddSpy = vi.spyOn(window, 'addEventListener')
+      const winRemoveSpy = vi.spyOn(window, 'removeEventListener')
+
+      const { unmount } = renderHook(() => useOnlineStatus())
+
+      expect(docAddSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+      expect(winAddSpy).toHaveBeenCalledWith('pagehide', expect.any(Function))
+
+      unmount()
+
+      expect(docRemoveSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+      expect(winRemoveSpy).toHaveBeenCalledWith('pagehide', expect.any(Function))
+    })
   })
 })

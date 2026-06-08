@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
+import java.time.Instant
+import java.time.format.DateTimeParseException
 import java.util.*
 
 class FlaggedQuestionsControllerTest {
@@ -241,6 +243,148 @@ class FlaggedQuestionsControllerTest {
 
             assertThat(result.body!!.category).isEqualTo(FlagCategory.HARD)
             assertThat(result.body!!.notes).isEqualTo("test notes") // original unchanged
+        }
+    }
+
+    // ── updateFlagReview ────────────────────────────────────────────
+    // PATCH /api/flags/{id}/review — Phase 4 durable SM-2: persists spaced-repetition
+    // review state pushed by spacedRepetitionService.pushReviewState. Mirrors updateFlag's
+    // ownership check (404 for both missing and other-user-owned flags — see its tests).
+
+    @Nested
+    inner class UpdateFlagReview {
+
+        @Test
+        fun `persists all SM-2 fields and refreshes updatedAt`() {
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val flag = createFlag()
+            val originalUpdatedAt = flag.updatedAt
+            val nextReview = "2026-06-10T12:00:00Z"
+            val lastReviewed = "2026-06-07T08:30:00Z"
+            val body = UpdateFlagReviewRequest(
+                easinessFactor = 2.7,
+                repetitionCount = 3,
+                intervalDays = 6,
+                nextReviewDate = nextReview,
+                lastReviewedAt = lastReviewed
+            )
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.of(flag)
+            every { flaggedQuestionRepository.save(any()) } answers { firstArg() }
+
+            val result = controller.updateFlagReview(flagId, body, httpRequest)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            val updated = result.body!!
+            assertThat(updated.easinessFactor).isEqualTo(2.7)
+            assertThat(updated.repetitionCount).isEqualTo(3)
+            assertThat(updated.intervalDays).isEqualTo(6)
+            assertThat(updated.nextReviewDate).isEqualTo(Instant.parse(nextReview))
+            assertThat(updated.lastReviewedAt).isEqualTo(Instant.parse(lastReviewed))
+            assertThat(updated.updatedAt).isAfterOrEqualTo(originalUpdatedAt)
+            verify { auditLogger.log(eq("FLAG_REVIEW_UPDATED"), eq(userId), any(), any(), any()) }
+        }
+
+        @Test
+        fun `null dates are persisted as null without parse exception`() {
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val flag = createFlag()
+            val body = UpdateFlagReviewRequest(
+                easinessFactor = 2.5,
+                repetitionCount = 0,
+                intervalDays = 1,
+                nextReviewDate = null,
+                lastReviewedAt = null
+            )
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.of(flag)
+            every { flaggedQuestionRepository.save(any()) } answers { firstArg() }
+
+            val result = controller.updateFlagReview(flagId, body, httpRequest)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            assertThat(result.body!!.nextReviewDate).isNull()
+            assertThat(result.body!!.lastReviewedAt).isNull()
+        }
+
+        @Test
+        fun `not found throws NotFoundException`() {
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val body = UpdateFlagReviewRequest(
+                easinessFactor = 2.5,
+                repetitionCount = 1,
+                intervalDays = 1,
+                nextReviewDate = null,
+                lastReviewedAt = null
+            )
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.empty()
+
+            assertThatThrownBy {
+                controller.updateFlagReview(flagId, body, httpRequest)
+            }.isInstanceOf(NotFoundException::class.java)
+
+            verify(exactly = 0) { flaggedQuestionRepository.save(any()) }
+        }
+
+        @Test
+        fun `flag owned by different user throws NotFoundException`() {
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val otherUserFlag = FlaggedQuestion(
+                userId = UUID.randomUUID(), // different user
+                topic = "Pharm",
+                question = emptyMap(),
+                category = FlagCategory.REVIEW
+            )
+            val body = UpdateFlagReviewRequest(
+                easinessFactor = 2.5,
+                repetitionCount = 1,
+                intervalDays = 1,
+                nextReviewDate = null,
+                lastReviewedAt = null
+            )
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.of(otherUserFlag)
+
+            assertThatThrownBy {
+                controller.updateFlagReview(flagId, body, httpRequest)
+            }.isInstanceOf(NotFoundException::class.java)
+
+            verify(exactly = 0) { flaggedQuestionRepository.save(any()) }
+        }
+
+        @Test
+        fun `malformed date string propagates DateTimeParseException`() {
+            // FINDING: updateFlagReview parses nextReviewDate/lastReviewedAt with
+            // Instant.parse(...) directly — a DateTimeParseException is a plain
+            // RuntimeException, NOT an NclexException, so GlobalExceptionHandler's
+            // NclexException branch can't catch it; it falls through to the generic
+            // Exception handler and is mapped to a 500 ("An unexpected error occurred")
+            // rather than a 400. A malformed client-supplied date string therefore
+            // surfaces as a server error, not a validation error — likely worth a
+            // try/catch -> ValidationException (400) in the controller.
+            mockAuth()
+            val flagId = UUID.randomUUID()
+            val flag = createFlag()
+            val body = UpdateFlagReviewRequest(
+                easinessFactor = 2.5,
+                repetitionCount = 1,
+                intervalDays = 1,
+                nextReviewDate = "not-a-date",
+                lastReviewedAt = null
+            )
+
+            every { flaggedQuestionRepository.findById(flagId) } returns Optional.of(flag)
+
+            assertThatThrownBy {
+                controller.updateFlagReview(flagId, body, httpRequest)
+            }.isInstanceOf(DateTimeParseException::class.java)
+
+            verify(exactly = 0) { flaggedQuestionRepository.save(any()) }
         }
     }
 

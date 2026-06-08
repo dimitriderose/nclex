@@ -5,11 +5,17 @@ import type {
   ExamQuestion,
   ExamResults,
   ExamHistoryItem,
+  QuestionReviewEntry,
 } from '../services/exam-api'
+import { NCJMM_STEPS } from '../types/content'
 import './ExamSimulation.css'
 
+function ncjmmLabel(step: string): string {
+  return NCJMM_STEPS.find((s) => s.key === step)?.label || step
+}
+
 export function ExamSimulation() {
-  const [phase, setPhase] = useState<'start' | 'exam' | 'results' | 'history'>('start')
+  const [phase, setPhase] = useState<'start' | 'exam' | 'results' | 'review' | 'history'>('start')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [currentQuestion, setCurrentQuestion] = useState<ExamQuestion | null>(null)
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
@@ -23,6 +29,21 @@ export function ExamSimulation() {
   const [error, setError] = useState<string | null>(null)
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now())
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const handleFinish = useCallback(async () => {
+    if (!sessionId) return
+    if (timerRef.current) clearInterval(timerRef.current)
+    setLoading(true)
+    try {
+      const data = await examApi.finishExam(sessionId)
+      setResults(data)
+      setPhase('results')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to finish exam')
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionId])
 
   // Timer
   useEffect(() => {
@@ -40,7 +61,7 @@ export function ExamSimulation() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [phase, sessionId, timeLimitMinutes])
+  }, [phase, sessionId, timeLimitMinutes, handleFinish])
 
   const formatTime = (seconds: number): string => {
     const h = Math.floor(seconds / 3600)
@@ -103,21 +124,6 @@ export function ExamSimulation() {
       setLoading(false)
     }
   }
-
-  const handleFinish = useCallback(async () => {
-    if (!sessionId) return
-    if (timerRef.current) clearInterval(timerRef.current)
-    setLoading(true)
-    try {
-      const data = await examApi.finishExam(sessionId)
-      setResults(data)
-      setPhase('results')
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to finish exam')
-    } finally {
-      setLoading(false)
-    }
-  }, [sessionId])
 
   const handleViewHistory = async () => {
     setLoading(true)
@@ -315,8 +321,48 @@ export function ExamSimulation() {
             <button className="btn-primary" onClick={() => setPhase('start')}>
               Take Another Exam
             </button>
+            {results.questionReview && results.questionReview.length > 0 && (
+              <button className="btn-secondary" onClick={() => setPhase('review')}>
+                Review Answers
+              </button>
+            )}
             <button className="btn-secondary" onClick={handleViewHistory}>
               View History
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Review Answers Screen ─────────────────────────────────────
+  // Closes issue #22: per-question ✓/✗, stem, selected vs. correct answer, rationale for
+  // misses, and topic/NCJMM badges — sourced from buildExamResults' questionReview array.
+
+  if (phase === 'review' && results) {
+    const review = results.questionReview ?? []
+    return (
+      <div className="exam-container">
+        <div className="exam-review-card">
+          <div className="exam-review-header">
+            <h2>Review Answers</h2>
+            <span className="review-summary-count">
+              {results.correctCount} / {results.totalQuestions} correct
+            </span>
+          </div>
+
+          <div className="review-answer-list">
+            {review.map((entry, index) => (
+              <QuestionReviewRow key={`${entry.questionId}-${index}`} entry={entry} index={index} />
+            ))}
+          </div>
+
+          <div className="exam-actions">
+            <button className="btn-primary" onClick={() => setPhase('results')}>
+              Back to Results
+            </button>
+            <button className="btn-secondary" onClick={() => setPhase('start')}>
+              Take Another Exam
             </button>
           </div>
         </div>
@@ -362,4 +408,56 @@ export function ExamSimulation() {
   }
 
   return <div className="exam-container"><p>Loading...</p></div>
+}
+
+/**
+ * One row in the post-exam "Review Answers" screen — ✓/✗ indicator, stem, the user's
+ * selected answer vs. the correct answer, rationale (only surfaced for misses, per the
+ * plan spec), and topic + NCJMM step badges. Entries from the bank-shortfall/placeholder
+ * path (no joined question content) degrade gracefully: stem/options/rationale render as
+ * empty/absent rather than throwing.
+ */
+function QuestionReviewRow({ entry, index }: { entry: QuestionReviewEntry; index: number }) {
+  const correctOptionIds = entry.correctAnswer?.correctOptionIds ?? []
+  const findOption = (id: string) => entry.options?.find((o) => o.id === id)
+  const selectedOption = findOption(entry.selectedAnswer)
+  const correctOption = correctOptionIds.length > 0 ? findOption(correctOptionIds[0]) : undefined
+
+  return (
+    <div className={`review-answer-row ${entry.correct ? 'correct' : 'incorrect'}`}>
+      <div className="review-answer-row-header">
+        <span className={`review-indicator ${entry.correct ? 'correct' : 'incorrect'}`} aria-label={entry.correct ? 'Correct' : 'Incorrect'}>
+          {entry.correct ? '✓' : '✗'}
+        </span>
+        <span className="review-question-number">Question {index + 1}</span>
+        {entry.topic && <span className="review-badge review-badge-topic">{entry.topic}</span>}
+        {entry.ncjmmStep && <span className="review-badge review-badge-ncjmm">{ncjmmLabel(entry.ncjmmStep)}</span>}
+      </div>
+
+      {entry.stem && <p className="review-stem">{entry.stem}</p>}
+
+      <div className="review-answer-comparison">
+        <div className="review-answer-line">
+          <span className="review-answer-label">Your answer:</span>
+          <span className={`review-answer-value ${entry.correct ? 'correct' : 'incorrect'}`}>
+            {selectedOption ? `${selectedOption.id}. ${selectedOption.text}` : entry.selectedAnswer || '—'}
+          </span>
+        </div>
+        {!entry.correct && (
+          <div className="review-answer-line">
+            <span className="review-answer-label">Correct answer:</span>
+            <span className="review-answer-value correct">
+              {correctOption ? `${correctOption.id}. ${correctOption.text}` : '—'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {!entry.correct && entry.rationale && (
+        <div className="review-rationale">
+          <strong>Rationale:</strong> {entry.rationale}
+        </div>
+      )}
+    </div>
+  )
 }

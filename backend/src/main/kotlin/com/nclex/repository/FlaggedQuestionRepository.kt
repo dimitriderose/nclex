@@ -17,6 +17,15 @@ interface FlaggedQuestionRepository : JpaRepository<FlaggedQuestion, UUID> {
     fun findByUserIdAndTopic(userId: UUID, topic: String): List<FlaggedQuestion>
     fun findByUserIdAndTopic(userId: UUID, topic: String, pageable: Pageable): Page<FlaggedQuestion>
 
+    /**
+     * Existence check used by the auto-flag-on-wrong-answer path (Phase 4): avoids creating
+     * a duplicate WRONG flag for a question the user has already gotten wrong before — one
+     * flag per (user, question, category) is enough to surface it in the review queue;
+     * repeated auto-creation would just spam the queue with redundant rows for a question
+     * the user keeps missing (which SM-2 already tracks via repetitionCount/easinessFactor).
+     */
+    fun existsByUserIdAndQuestionIdAndCategory(userId: UUID, questionId: UUID, category: FlagCategory): Boolean
+
     @Modifying
     @Query("DELETE FROM FlaggedQuestion fq WHERE fq.id = :id AND fq.userId = :userId")
     fun deleteByIdAndUserId(id: UUID, userId: UUID): Long

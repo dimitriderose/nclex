@@ -59,12 +59,21 @@ class ExamSimulationControllerTest {
     inner class SubmitAnswer {
 
         @Test
-        fun `returns answer result`() {
+        fun `returns answer result with next question merged in when exam continues`() {
+            // Two-step orchestration (Architect "Transaction boundaries" finding — see
+            // ExamSimulationService.submitAnswer's doc): the controller calls submitAnswer
+            // (grades + persists, no `nextQuestion` in its "continues" response) and then
+            // separately calls getNextQuestionForSession *after* that transaction has
+            // committed — specifically so a cold-bank Claude call never runs while a
+            // grading transaction holds a DB connection. Was: a single submitAnswer stub
+            // returning `nextQuestion` directly, which the controller no longer relies on.
             val sessionId = UUID.randomUUID()
             val answerResult = mapOf<String, Any>("correct" to true, "examContinues" to true)
+            val nextQuestion = mapOf<String, Any>("questionId" to "q2", "stem" to "Next stem")
             val request = AnswerRequest("q1", "A", 30)
 
             every { examSimulationService.submitAnswer(userId, sessionId, request) } returns answerResult
+            every { examSimulationService.getNextQuestionForSession(userId, sessionId) } returns nextQuestion
 
             val result = controller.submitAnswer(userId, sessionId, request)
 
@@ -73,6 +82,32 @@ class ExamSimulationControllerTest {
             val body = result.body as Map<String, Any>
             assertThat(body["correct"]).isEqualTo(true)
             assertThat(body["examContinues"]).isEqualTo(true)
+            assertThat(body["nextQuestion"]).isEqualTo(nextQuestion)
+        }
+
+        @Test
+        fun `does not fetch next question when exam has ended`() {
+            // examContinues = false (e.g. timeout/CAT termination/finish) — the controller
+            // must not call getNextQuestionForSession at all (no question to serve, and no
+            // reason to risk a cold-bank Claude call on a session that's already over).
+            val sessionId = UUID.randomUUID()
+            val finishResult = mapOf<String, Any>(
+                "status" to "COMPLETED",
+                "examContinues" to false,
+                "passPrediction" to true
+            )
+            val request = AnswerRequest("q1", "A", 30)
+
+            every { examSimulationService.submitAnswer(userId, sessionId, request) } returns finishResult
+
+            val result = controller.submitAnswer(userId, sessionId, request)
+
+            assertThat(result.statusCode.value()).isEqualTo(200)
+            @Suppress("UNCHECKED_CAST")
+            val body = result.body as Map<String, Any>
+            assertThat(body["examContinues"]).isEqualTo(false)
+            assertThat(body).doesNotContainKey("nextQuestion")
+            verify(exactly = 0) { examSimulationService.getNextQuestionForSession(any(), any()) }
         }
     }
 
@@ -95,6 +130,42 @@ class ExamSimulationControllerTest {
             val body = result.body as Map<String, Any>
             assertThat(body["examContinues"]).isEqualTo(false)
         }
+
+        @Test
+        fun `surfaces questionReview from service results untouched`() {
+            // The controller is a thin pass-through over examSimulationService.finishExam's
+            // results map (which buildExamResults populates with a `questionReview` key —
+            // see ExamSimulationService.buildExamResults / buildQuestionReview). Confirm the
+            // controller doesn't drop or transform it on the way to the HTTP response.
+            val sessionId = UUID.randomUUID()
+            val questionReview = listOf(
+                mapOf<String, Any>(
+                    "questionId" to UUID.randomUUID().toString(),
+                    "correct" to true,
+                    "stem" to "A client is prescribed...",
+                    "options" to listOf(mapOf("id" to "a", "text" to "Option text")),
+                    "selectedAnswer" to "a",
+                    "correctAnswer" to mapOf("correctOptionIds" to listOf("a")),
+                    "rationale" to "Because...",
+                    "topic" to "Pharmacological and Parenteral Therapies",
+                    "ncjmmStep" to "take_action"
+                )
+            )
+            val results = mapOf<String, Any>(
+                "status" to "COMPLETED",
+                "passPrediction" to true,
+                "examContinues" to false,
+                "questionReview" to questionReview
+            )
+
+            every { examSimulationService.finishExam(userId, sessionId) } returns results
+
+            val result = controller.finishExam(userId, sessionId)
+
+            @Suppress("UNCHECKED_CAST")
+            val body = result.body as Map<String, Any>
+            assertThat(body["questionReview"]).isEqualTo(questionReview)
+        }
     }
 
     // ── getExamState ───────────────────────────────────────────────
@@ -112,6 +183,30 @@ class ExamSimulationControllerTest {
             val result = controller.getExamState(userId, sessionId)
 
             assertThat(result.statusCode.value()).isEqualTo(200)
+        }
+
+        @Test
+        fun `surfaces questionReview when exam has ended`() {
+            // For a non-IN_PROGRESS session, getExamState merges in buildExamResults' map
+            // (which includes `questionReview`) — confirm the controller passes it through
+            // verbatim rather than stripping/reshaping it.
+            val sessionId = UUID.randomUUID()
+            val questionReview = listOf(
+                mapOf<String, Any>("questionId" to "", "correct" to false, "stem" to "")
+            )
+            val state = mapOf<String, Any>(
+                "status" to "COMPLETED",
+                "totalQuestions" to 80,
+                "questionReview" to questionReview
+            )
+
+            every { examSimulationService.getExamState(userId, sessionId) } returns state
+
+            val result = controller.getExamState(userId, sessionId)
+
+            @Suppress("UNCHECKED_CAST")
+            val body = result.body as Map<String, Any>
+            assertThat(body["questionReview"]).isEqualTo(questionReview)
         }
     }
 

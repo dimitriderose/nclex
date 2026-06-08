@@ -42,6 +42,16 @@ export interface FlaggedQuestion {
   question: Record<string, unknown>
   category: FlagCategory
   notes: string | null
+  // Links this flag back to its generated_questions bank row (V8 migration). Null for
+  // legacy flags created before the bank existed (full content lives inline in `question`).
+  questionId?: string | null
+  // Durable SM-2 spaced-repetition state (V8 migration) — backend is now the source of
+  // truth for review scheduling; see PATCH /api/flags/{id}/review and spaced-repetition.ts.
+  nextReviewDate?: string | null
+  easinessFactor?: number
+  repetitionCount?: number
+  intervalDays?: number
+  lastReviewedAt?: string | null
   createdAt: string
   updatedAt: string
 }

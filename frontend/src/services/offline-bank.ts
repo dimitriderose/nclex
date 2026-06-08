@@ -4,11 +4,28 @@
  */
 
 import type { GeneratedQuestion } from '../types/content';
+import { questionService } from './question-service';
 
 const BANK_KEY = 'nclex:offline_bank';
 const BANK_META_KEY = 'nclex:offline_bank_meta';
 const BANK_SIZE = 100;
-const BANK_MAX_AGE_DAYS = 7;
+// Signed-off PRD policy (docs/NCLEX_Trainer_v5_PRD.md:953) is a 24-hour regeneration window —
+// was previously mismatched at 7 days, leaving the bank stale far longer than playtesters agreed to.
+const BANK_MAX_AGE_DAYS = 1;
+
+// Spread of NCLEX-RN client-needs categories (mirrors PracticePage's TOPICS / the exam
+// simulator's TOPIC_DISTRIBUTION) — populating across all of them keeps the offline bank
+// useful regardless of which topic the user practices while offline.
+const BANK_TOPICS = [
+  'Pharmacological Therapies', 'Management of Care', 'Safety and Infection Control',
+  'Physiological Adaptation', 'Reduction of Risk Potential', 'Basic Care and Comfort',
+  'Health Promotion and Maintenance', 'Psychosocial Integrity',
+];
+
+// generateBatch caps `count` at 20 server-side, so spreading BANK_SIZE across topics in
+// chunks (round-robin across BANK_TOPICS per request) keeps each request within that limit
+// while still reaching ~100 questions total.
+const POPULATE_BATCH_SIZE = 20;
 
 interface BankMeta {
   generatedAt: string;
@@ -95,6 +112,59 @@ export const offlineBank = {
 
   getBankSize(): number {
     return this.getBank().length;
+  },
+
+  /**
+   * Populate the offline bank per PRD §5.9: fetch ~BANK_SIZE questions spread across a
+   * variety of topics (now bank-first server-side, so this mostly reuses existing
+   * generated_questions rows rather than spending fresh Claude calls) and persist them
+   * via setBank(). Intended to run on session end when shouldRegenerateBank() is true
+   * (see useOnlineStatus's session-end trigger).
+   *
+   * Requests are chunked at POPULATE_BATCH_SIZE (the server-side generateBatch cap) and
+   * round-robin across BANK_TOPICS so every category gets representation. Failures on
+   * individual chunks are swallowed (best-effort) — a partially-filled bank from whatever
+   * succeeded is still more useful offline than none, and shouldRegenerateBank() will
+   * retry on the next session if the result lands below BANK_SIZE * 0.5.
+   */
+  async populateBank(): Promise<GeneratedQuestion[]> {
+    const collected: GeneratedQuestion[] = [];
+    let remaining = BANK_SIZE;
+    let topicOffset = 0;
+
+    while (remaining > 0) {
+      const count = Math.min(POPULATE_BATCH_SIZE, remaining);
+      const topics = Array.from(
+        { length: Math.min(count, BANK_TOPICS.length) },
+        (_, i) => BANK_TOPICS[(topicOffset + i) % BANK_TOPICS.length]
+      );
+      topicOffset += topics.length;
+
+      try {
+        const batch = await questionService.generateBatch({ topics, count, difficulty: 'medium' });
+        collected.push(...batch);
+      } catch (e) {
+        console.warn('Offline bank population: batch failed, continuing with what we have', e);
+      }
+
+      remaining -= count;
+    }
+
+    if (collected.length > 0) {
+      this.setBank(collected);
+    }
+    return collected;
+  },
+
+  /**
+   * Convenience wrapper: regenerate the bank only if it's due (per shouldRegenerateBank),
+   * otherwise no-op. Safe to call opportunistically (e.g., on session end / going offline)
+   * without re-checking staleness at every call site.
+   */
+  async maybeRegenerateBank(): Promise<boolean> {
+    if (!this.shouldRegenerateBank()) return false;
+    const questions = await this.populateBank();
+    return questions.length > 0;
   },
 
   clearBank(): void {
